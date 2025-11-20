@@ -1,0 +1,35 @@
+# Create book1.json - The Great Gatsby
+@'
+{
+  "title": "The Great Gatsby",
+  "author": "F. Scott Fitzgerald",
+  "isbn": "9780743273565",
+  "publicationYear": 1925,
+  "genre": "Fiction",
+  "publisher": "Scribner",
+  "pageCount": 180
+}
+'@ | Out-File -FilePath "book1.json" -Encoding utf8
+
+# Create book2.json - To Kill a Mockingbird
+@'
+{
+  "title": "To Kill a Mockingbird", 
+  "author": "Harper Lee",
+  "isbn": "9780061120084",
+  "publicationYear": 1960,
+  "genre": "Fiction",
+  "publisher": "J.B. Lippincott & Co.",
+  "pageCount": 281
+}
+'@ | Out-File -FilePath "book2.json" -Encoding utf8
+
+# Create member.json
+@'
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "email": "john.doe@email.com",
+  "membershipType": "Premium"
+}
+'@ | Out-File -FilePath "member.json" -Encoding utf8

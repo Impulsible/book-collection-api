@@ -1,0 +1,69 @@
+curl.exe http://localhost:3000/health
+
+curl.exe http://localhost:3000/api/books
+curl.exe http://localhost:3000/api/members
+
+
+curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d "@book1.json"
+
+
+curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d "@book2.json"
+
+
+curl.exe http://localhost:3000/api/books
+
+
+curl.exe -X POST http://localhost:3000/api/members -H "Content-Type: application/json" -d "@member.json"
+
+
+curl.exe http://localhost:3000/api/members
+
+
+curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d '{"title":"Test Book"}'
+
+
+curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d '{"title":"Test Book","author":"Test Author","isbn":"123","publicationYear":2023,"genre":"Fiction","publisher":"Test Pub","pageCount":100}'
+
+
+curl.exe -X POST http://localhost:3000/api/members -H "Content-Type: application/json" -d '{"firstName":"Test","lastName":"User","email":"invalid-email","membershipType":"Basic"}'
+
+
+curl.exe http://localhost:3000/api/books/507f1f77bcf86cd799439011
+
+curl.exe http://localhost:3000/api/books/invalid-id-format
+
+
+curl.exe http://localhost:3000/api/books
+
+
+
+curl.exe -X PUT http://localhost:3000/api/books/ACTUAL_BOOK1_ID -H "Content-Type: application/json" -d '{"pageCount":250}'
+
+
+curl.exe -X PUT http://localhost:3000/api/members/ACTUAL_MEMBER_ID -H "Content-Type: application/json" -d '{"membershipType":"Student"}'
+
+
+curl.exe -X DELETE http://localhost:3000/api/books/ACTUAL_BOOK1_ID
+
+
+curl.exe -X DELETE http://localhost:3000/api/books/ACTUAL_BOOK2_ID
+
+curl.exe -X DELETE http://localhost:3000/api/members/ACTUAL_MEMBER_ID
+
+
+curl.exe http://localhost:3000/api/books
+curl.exe http://localhost:3000/api/members
+
+
+curl.exe https://YOUR_ACTUAL_APP.onrender.com/health
+
+
+curl.exe -X POST https://YOUR_ACTUAL_APP.onrender.com/api/books -H "Content-Type: application/json" -d '{"title":"Production Book","author":"Live Author","isbn":"1111111111","publicationYear":2024,"genre":"Fiction","publisher":"Live Pub","pageCount":300}'
+
+
+curl.exe https://YOUR_ACTUAL_APP.onrender.com/api/books
+
+
+Remove-Item "book1.json" -ErrorAction SilentlyContinue
+Remove-Item "book2.json" -ErrorAction SilentlyContinue
+Remove-Item "member.json" -ErrorAction SilentlyContinue

@@ -1,0 +1,278 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Library Management API",
+    "description": "A complete CRUD API for managing library books and members with data validation and error handling",
+    "version": "1.0.0",
+    "contact": {
+      "name": "API Support",
+      "url": "https://github.com/yourusername/library-management-api"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Development server"
+    },
+    {
+      "url": "https://your-actual-app-name.onrender.com",
+      "description": "Production server"
+    }
+  ],
+  "paths": {
+    "/api/books": {
+      "get": {
+        "summary": "Get all books",
+        "description": "Retrieve a list of all books in the library",
+        "responses": {
+          "200": {
+            "description": "Successful response with array of books",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": [],
+                  "count": 0
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new book",
+        "description": "Add a new book to the library collection with data validation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "author", "isbn", "publicationYear", "genre", "publisher", "pageCount"],
+                "properties": {
+                  "title": {"type": "string", "example": "The Great Gatsby"},
+                  "author": {"type": "string", "example": "F. Scott Fitzgerald"},
+                  "isbn": {"type": "string", "example": "9780743273565"},
+                  "publicationYear": {"type": "number", "example": 1925},
+                  "genre": {"type": "string", "example": "Fiction"},
+                  "publisher": {"type": "string", "example": "Scribner"},
+                  "pageCount": {"type": "number", "example": 180},
+                  "description": {"type": "string", "example": "A classic novel"},
+                  "language": {"type": "string", "example": "English"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Book created successfully"
+          },
+          "400": {
+            "description": "Validation error - missing or invalid data"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/api/books/{id}": {
+      "get": {
+        "summary": "Get book by ID",
+        "description": "Retrieve a specific book by its ID",
+        "parameters": [{
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {"type": "string"},
+          "example": "673a1b2c3d4e5f6789012345"
+        }],
+        "responses": {
+          "200": {"description": "Book found successfully"},
+          "400": {"description": "Invalid ID format"},
+          "404": {"description": "Book not found"},
+          "500": {"description": "Internal server error"}
+        }
+      },
+      "put": {
+        "summary": "Update book by ID",
+        "description": "Update an existing book with data validation",
+        "parameters": [{
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {"type": "string"},
+          "example": "673a1b2c3d4e5f6789012345"
+        }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {"type": "string"},
+                  "author": {"type": "string"},
+                  "isbn": {"type": "string"},
+                  "publicationYear": {"type": "number"},
+                  "genre": {"type": "string"},
+                  "publisher": {"type": "string"},
+                  "pageCount": {"type": "number"},
+                  "description": {"type": "string"},
+                  "language": {"type": "string"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Book updated successfully"},
+          "400": {"description": "Validation error"},
+          "404": {"description": "Book not found"},
+          "500": {"description": "Internal server error"}
+        }
+      },
+      "delete": {
+        "summary": "Delete book by ID",
+        "description": "Remove a book from the library collection",
+        "parameters": [{
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {"type": "string"},
+          "example": "673a1b2c3d4e5f6789012345"
+        }],
+        "responses": {
+          "200": {"description": "Book deleted successfully"},
+          "400": {"description": "Invalid ID format"},
+          "404": {"description": "Book not found"},
+          "500": {"description": "Internal server error"}
+        }
+      }
+    },
+    "/api/members": {
+      "get": {
+        "summary": "Get all members",
+        "description": "Retrieve a list of all library members",
+        "responses": {
+          "200": {
+            "description": "Successful response with array of members",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "data": [],
+                  "count": 0
+                }
+              }
+            }
+          },
+          "500": {"description": "Internal server error"}
+        }
+      },
+      "post": {
+        "summary": "Create new member",
+        "description": "Register a new library member with data validation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["firstName", "lastName", "email", "membershipType"],
+                "properties": {
+                  "firstName": {"type": "string", "example": "John"},
+                  "lastName": {"type": "string", "example": "Doe"},
+                  "email": {"type": "string", "example": "john.doe@email.com"},
+                  "phone": {"type": "string", "example": "1234567890"},
+                  "membershipType": {"type": "string", "example": "Premium"},
+                  "maxBooks": {"type": "number", "example": 10}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {"description": "Member created successfully"},
+          "400": {"description": "Validation error"},
+          "500": {"description": "Internal server error"}
+        }
+      }
+    },
+    "/api/members/{id}": {
+      "get": {
+        "summary": "Get member by ID",
+        "parameters": [{
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {"type": "string"},
+          "example": "673a1b2c3d4e5f6789012345"
+        }],
+        "responses": {
+          "200": {"description": "Member found"},
+          "400": {"description": "Invalid ID format"},
+          "404": {"description": "Member not found"},
+          "500": {"description": "Internal server error"}
+        }
+      },
+      "put": {
+        "summary": "Update member by ID",
+        "parameters": [{
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {"type": "string"},
+          "example": "673a1b2c3d4e5f6789012345"
+        }],
+        "responses": {
+          "200": {"description": "Member updated"},
+          "400": {"description": "Validation error"},
+          "404": {"description": "Member not found"},
+          "500": {"description": "Internal server error"}
+        }
+      },
+      "delete": {
+        "summary": "Delete member by ID",
+        "parameters": [{
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {"type": "string"},
+          "example": "673a1b2c3d4e5f6789012345"
+        }],
+        "responses": {
+          "200": {"description": "Member deleted"},
+          "400": {"description": "Invalid ID format"},
+          "404": {"description": "Member not found"},
+          "500": {"description": "Internal server error"}
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "description": "Check if the API is running and database is connected",
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "OK",
+                  "timestamp": "2024-11-20T16:30:00.000Z",
+                  "database": "Connected",
+                  "uptime": 123.45
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
