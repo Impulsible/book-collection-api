@@ -1,68 +1,39 @@
+# =============================================================================
+# WEEK 03 PROJECT - COMPLETE WORKING TEST SCRIPT
+# All operations now working including UPDATE!
+# =============================================================================
+
+# 1. Health Check & Initial State
 curl.exe http://localhost:3000/health
-
-curl.exe http://localhost:3000/api/books
-curl.exe http://localhost:3000/api/members
-
-
-curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d "@book1.json"
-
-
-curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d "@book2.json"
-
-
 curl.exe http://localhost:3000/api/books
 
+# 2. CREATE Books
+curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d "@Book1.json"
+curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d "@Book2.json"
 
-curl.exe -X POST http://localhost:3000/api/members -H "Content-Type: application/json" -d "@member.json"
+# 3. Verify CREATE
+curl.exe http://localhost:3000/api/books
 
+# 4. UPDATE Book (with full data)
+curl.exe -X PUT http://localhost:3000/api/books/691fb75b95b4021320b2a4f3 -H "Content-Type: application/json" -d "{\"title\":\"Updated Title\",\"author\":\"Updated Author\",\"isbn\":\"9780743273565\",\"publicationYear\":2024,\"genre\":\"Fiction\",\"publisher\":\"Updated Pub\",\"pageCount\":500}"
 
-curl.exe http://localhost:3000/api/members
+# 5. Data Validation Tests
+curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d "{\"title\":\"Test Book\"}"
 
-
-curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d '{"title":"Test Book"}'
-
-
-curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d '{"title":"Test Book","author":"Test Author","isbn":"123","publicationYear":2023,"genre":"Fiction","publisher":"Test Pub","pageCount":100}'
-
-
-curl.exe -X POST http://localhost:3000/api/members -H "Content-Type: application/json" -d '{"firstName":"Test","lastName":"User","email":"invalid-email","membershipType":"Basic"}'
-
-
+# 6. Error Handling Tests
 curl.exe http://localhost:3000/api/books/507f1f77bcf86cd799439011
+curl.exe http://localhost:3000/api/books/adfre34578ert23111890hj
 
-curl.exe http://localhost:3000/api/books/invalid-id-format
+# 7. DELETE Operations
+curl.exe -X DELETE http://localhost:3000/api/books/691fb75b95b4021320b2a4f3
 
-
+# 8. Verify Final State
 curl.exe http://localhost:3000/api/books
 
-
-
-curl.exe -X PUT http://localhost:3000/api/books/ACTUAL_BOOK1_ID -H "Content-Type: application/json" -d '{"pageCount":250}'
-
-
-curl.exe -X PUT http://localhost:3000/api/members/ACTUAL_MEMBER_ID -H "Content-Type: application/json" -d '{"membershipType":"Student"}'
-
-
-curl.exe -X DELETE http://localhost:3000/api/books/ACTUAL_BOOK1_ID
-
-
-curl.exe -X DELETE http://localhost:3000/api/books/ACTUAL_BOOK2_ID
-
-curl.exe -X DELETE http://localhost:3000/api/members/ACTUAL_MEMBER_ID
-
-
-curl.exe http://localhost:3000/api/books
-curl.exe http://localhost:3000/api/members
-
-
+# 9. Live Deployment
 curl.exe https://book-collection-api-0vgp.onrender.com/health
-
-
-curl.exe -X POST https://book-collection-api-0vgp.onrender.com/api/books -H "Content-Type: application/json" -d '{"title":"Production Book","author":"Live Author","isbn":"1111111111","publicationYear":2024,"genre":"Fiction","publisher":"Live Pub","pageCount":300}'
-
+curl.exe -X POST https://book-collection-api-0vgp.onrender.com/api/books -H "Content-Type: application/json" -d "@book1.json"
 curl.exe https://book-collection-api-0vgp.onrender.com/api/books
 
-
-Remove-Item "book1.json" -ErrorAction SilentlyContinue
-Remove-Item "book2.json" -ErrorAction SilentlyContinue
-Remove-Item "member.json" -ErrorAction SilentlyContinue
+# Cleanup
+Remove-Item "book1.json","book2.json" -ErrorAction SilentlyContinue

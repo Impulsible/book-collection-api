@@ -1,4 +1,3 @@
-
 {
   "title": "Home of the Brave",
   "author": "John Steinbeck",
@@ -7,14 +6,4 @@
   "genre": "Fiction",
   "publisher": "J.B. Lippincott & Co.",
   "pageCount": 281
-}
-
-{
-  "title": "Spirit Bound",
-  "author": "F. Scott Fitzgerald",
-  "isbn": "9761800273567",
-  "publicationYear": 1925,
-  "genre": "Fantasy",
-  "publisher": "Scribner",
-  "pageCount": 180
 }
