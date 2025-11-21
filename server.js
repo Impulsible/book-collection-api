@@ -4,7 +4,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const bookRoutes = require('./routes/bookRoutes');
-const memberRoutes = require('./routes/memberRoutes');
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,7 +15,6 @@ app.use(express.json());
 
 // Routes
 app.use('/api/books', bookRoutes);
-app.use('/api/members', memberRoutes);
 
 // MongoDB Connection
 const connectDB = async () => {
