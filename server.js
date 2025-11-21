@@ -3,8 +3,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
 
+// Import routes - DO NOT import authorRoutes here yet
 const bookRoutes = require('./routes/bookRoutes');
-
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,8 +13,12 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Routes
+// Routes - ADD THIS LINE to import authorRoutes AFTER app is created
+const authorRoutes = require('./routes/authorRoutes');
+
+// Now use the routes
 app.use('/api/books', bookRoutes);
+app.use('/api/authors', authorRoutes);
 
 // MongoDB Connection
 const connectDB = async () => {
@@ -30,12 +34,12 @@ const connectDB = async () => {
 // Basic routes
 app.get('/', (req, res) => {
     res.json({ 
-        message: '📚 Library Management API',
+        message: '📚 Book Collection API',
         version: '1.0.0',
-        description: 'A complete CRUD API for managing library books and members',
+        description: 'A complete CRUD API for managing books and authors',
         endpoints: {
             'Books': '/api/books',
-            'Members': '/api/members',
+            'Authors': '/api/authors',
             'Health check': '/health'
         },
         database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'

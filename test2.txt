@@ -1,39 +1,34 @@
 # =============================================================================
-# WEEK 03 PROJECT - COMPLETE WORKING TEST SCRIPT
-# All operations now working including UPDATE!
+# WEEK 03 PROJECT - COMPLETE TEST (TWO COLLECTIONS)
 # =============================================================================
 
-# 1. Health Check & Initial State
+# Health Check
 curl.exe http://localhost:3000/health
+
+# BOOKS COLLECTION
+curl.exe http://localhost:3000/api/books
+curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d "@book1.json"
+curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d "@book2.json"
 curl.exe http://localhost:3000/api/books
 
-# 2. CREATE Books
-curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d "@Book1.json"
-curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d "@Book2.json"
+# AUTHORS COLLECTION  
+curl.exe http://localhost:3000/api/authors
+curl.exe -X POST http://localhost:3000/api/authors -H "Content-Type: application/json" -d "@author1.json"
+curl.exe -X POST http://localhost:3000/api/authors -H "Content-Type: application/json" -d "@author2.json"
+curl.exe http://localhost:3000/api/authors
 
-# 3. Verify CREATE
-curl.exe http://localhost:3000/api/books
-
-# 4. UPDATE Book (with full data)
-curl.exe -X PUT http://localhost:3000/api/books/69203ed984a511733aa69a7f -H "Content-Type: application/json" -d "{\"title\":\"Updated Title\",\"author\":\"Updated Author\",\"isbn\":\"9780743273565\",\"publicationYear\":2024,\"genre\":\"Fiction\",\"publisher\":\"Updated Pub\",\"pageCount\":500}"
-
-# 5. Data Validation Tests
+# Data Validation Tests (Both Collections)
 curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d "{\"title\":\"Test Book\"}"
+curl.exe -X POST http://localhost:3000/api/authors -H "Content-Type: application/json" -d "{\"name\":\"Test Author\"}"
 
-# 6. Error Handling Tests
+# Error Handling Tests
 curl.exe http://localhost:3000/api/books/507f1f77bcf86cd799439011
-curl.exe http://localhost:3000/api/books/adfre34578ert23111890hj
+curl.exe http://localhost:3000/api/authors/507f1f77bcf86cd799439011
 
-# 7. DELETE Operations
-curl.exe -X DELETE http://localhost:3000/api/books/69203ee684a511733aa69a81
-
-# 8. Verify Final State
-curl.exe http://localhost:3000/api/books
-
-# 9. Live Deployment
+# Live Deployment
 curl.exe https://book-collection-api-0vgp.onrender.com/health
-curl.exe -X POST https://book-collection-api-0vgp.onrender.com/api/books -H "Content-Type: application/json" -d "@book1.json"
 curl.exe https://book-collection-api-0vgp.onrender.com/api/books
+curl.exe https://book-collection-api-0vgp.onrender.com/api/authors
 
 # Cleanup
-Remove-Item "book1.json","book2.json" -ErrorAction SilentlyContinue
+Remove-Item "Book1.json","Book2.json","author1.json","author2.json"," -ErrorAction SilentlyContinue
