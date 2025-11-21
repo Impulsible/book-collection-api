@@ -15,7 +15,7 @@ curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/j
 curl.exe http://localhost:3000/api/books
 
 # 4. UPDATE Book (with full data)
-curl.exe -X PUT http://localhost:3000/api/books/691fb75b95b4021320b2a4f3 -H "Content-Type: application/json" -d "{\"title\":\"Updated Title\",\"author\":\"Updated Author\",\"isbn\":\"9780743273565\",\"publicationYear\":2024,\"genre\":\"Fiction\",\"publisher\":\"Updated Pub\",\"pageCount\":500}"
+curl.exe -X PUT http://localhost:3000/api/books/69203ed984a511733aa69a7f -H "Content-Type: application/json" -d "{\"title\":\"Updated Title\",\"author\":\"Updated Author\",\"isbn\":\"9780743273565\",\"publicationYear\":2024,\"genre\":\"Fiction\",\"publisher\":\"Updated Pub\",\"pageCount\":500}"
 
 # 5. Data Validation Tests
 curl.exe -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d "{\"title\":\"Test Book\"}"
@@ -25,7 +25,7 @@ curl.exe http://localhost:3000/api/books/507f1f77bcf86cd799439011
 curl.exe http://localhost:3000/api/books/adfre34578ert23111890hj
 
 # 7. DELETE Operations
-curl.exe -X DELETE http://localhost:3000/api/books/691fb75b95b4021320b2a4f3
+curl.exe -X DELETE http://localhost:3000/api/books/69203ee684a511733aa69a81
 
 # 8. Verify Final State
 curl.exe http://localhost:3000/api/books
