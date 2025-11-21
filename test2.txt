@@ -55,13 +55,12 @@ curl.exe http://localhost:3000/api/books
 curl.exe http://localhost:3000/api/members
 
 
-curl.exe https://YOUR_ACTUAL_APP.onrender.com/health
+curl.exe https://book-collection-api-0vgp.onrender.com/health
 
 
-curl.exe -X POST https://YOUR_ACTUAL_APP.onrender.com/api/books -H "Content-Type: application/json" -d '{"title":"Production Book","author":"Live Author","isbn":"1111111111","publicationYear":2024,"genre":"Fiction","publisher":"Live Pub","pageCount":300}'
+curl.exe -X POST https://book-collection-api-0vgp.onrender.com/api/books -H "Content-Type: application/json" -d '{"title":"Production Book","author":"Live Author","isbn":"1111111111","publicationYear":2024,"genre":"Fiction","publisher":"Live Pub","pageCount":300}'
 
-
-curl.exe https://YOUR_ACTUAL_APP.onrender.com/api/books
+curl.exe https://book-collection-api-0vgp.onrender.com/api/books
 
 
 Remove-Item "book1.json" -ErrorAction SilentlyContinue

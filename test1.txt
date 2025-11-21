@@ -1,5 +1,4 @@
-# Create book1.json - The Great Gatsby
-@'
+
 {
   "title": "The Great Gatsby",
   "author": "F. Scott Fitzgerald",
@@ -9,10 +8,7 @@
   "publisher": "Scribner",
   "pageCount": 180
 }
-'@ | Out-File -FilePath "book1.json" -Encoding utf8
 
-# Create book2.json - To Kill a Mockingbird
-@'
 {
   "title": "To Kill a Mockingbird", 
   "author": "Harper Lee",
