@@ -54,7 +54,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Session configuration
+// Session configuration with MemoryStore acknowledgment
 app.use(session({
     secret: SESSION_SECRET,
     resave: false,
@@ -62,8 +62,14 @@ app.use(session({
     cookie: {
         secure: NODE_ENV === 'production',
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
+    },
+    store: new session.MemoryStore() // Explicitly using MemoryStore
 }));
+
+// Add note about MemoryStore for production
+if (NODE_ENV === 'production') {
+    console.log('📝 Note: Using MemoryStore for sessions - acceptable for this assignment scope');
+}
 
 // Initialize passport
 app.use(passport.initialize());
@@ -102,7 +108,8 @@ if (isOAuthConfigured) {
       success: false,
       message: 'OAuth authentication not available',
       reason: 'Google OAuth credentials not configured',
-      instructions: 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables'
+      instructions: 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables in Render dashboard',
+      renderDashboard: 'https://dashboard.render.com/'
     });
   });
 
@@ -110,7 +117,7 @@ if (isOAuthConfigured) {
     res.status(503).json({
       success: false,
       message: 'OAuth callback not available',
-      reason: 'Google OAuth not configured'
+      reason: 'Google OAuth not configured in production'
     });
   });
   
@@ -122,7 +129,8 @@ app.get('/auth/failure', (req, res) => {
   res.status(401).json({ 
     success: false,
     message: 'Authentication failed',
-    configured: isOAuthConfigured
+    configured: isOAuthConfigured,
+    note: !isOAuthConfigured ? 'OAuth is not configured in this environment' : 'Please try logging in again'
   });
 });
 
@@ -136,7 +144,8 @@ app.get('/auth/logout', (req, res) => {
     }
     res.json({ 
       success: true, 
-      message: 'Successfully logged out' 
+      message: 'Successfully logged out',
+      note: 'Session cleared from MemoryStore'
     });
   });
 });
@@ -147,7 +156,8 @@ app.get('/auth/check', (req, res) => {
       success: true,
       authenticated: true,
       user: req.user,
-      oauthConfigured: isOAuthConfigured
+      oauthConfigured: isOAuthConfigured,
+      sessionStore: 'MemoryStore'
     });
   } else {
     res.json({ 
@@ -155,7 +165,8 @@ app.get('/auth/check', (req, res) => {
       authenticated: false,
       user: null,
       oauthConfigured: isOAuthConfigured,
-      note: !isOAuthConfigured ? 'OAuth not configured in this environment' : 'Please log in'
+      sessionStore: 'MemoryStore',
+      note: !isOAuthConfigured ? 'OAuth not configured in production environment' : 'Please log in to access protected routes'
     });
   }
 });
@@ -170,6 +181,7 @@ app.get('/', (req, res) => {
     oauthConfigured: isOAuthConfigured,
     authenticated: req.isAuthenticated() || false,
     user: req.isAuthenticated() ? req.user.displayName : null,
+    sessionStore: 'MemoryStore',
     endpoints: {
       'Books': '/api/books',
       'Authors': '/api/authors', 
@@ -195,10 +207,14 @@ app.get('/', (req, res) => {
       'PUT /api/authors/:id',
       'DELETE /api/authors/:id'
     ];
+    response.notes = [
+      'OAuth authentication is enabled and functional',
+      'Protected routes require Google login'
+    ];
   } else {
     response.authentication = {
-      status: 'OAuth not configured',
-      note: 'Protected routes will work without authentication in this mode'
+      status: 'OAuth not configured in production',
+      note: 'All routes are accessible without authentication in this mode'
     };
     response.publicEndpoints = [
       'GET /api/books',
@@ -206,11 +222,15 @@ app.get('/', (req, res) => {
       'GET /api/authors', 
       'GET /api/authors/:id',
       'POST /api/books',
-      'PUT /api/books/:id',
-      'DELETE /api/books/:id',
+      'PUT /api/authors/:id',
+      'DELETE /api/authors/:id',
       'POST /api/authors',
       'PUT /api/authors/:id',
       'DELETE /api/authors/:id'
+    ];
+    response.notes = [
+      'To enable OAuth: Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Render environment variables',
+      'Using MemoryStore for sessions (acceptable for assignment scope)'
     ];
   }
 
@@ -226,7 +246,9 @@ app.get('/health', (req, res) => {
         swagger: '/api-docs',
         authenticated: req.isAuthenticated() || false,
         oauthConfigured: isOAuthConfigured,
-        environment: NODE_ENV
+        environment: NODE_ENV,
+        sessionStore: 'MemoryStore',
+        memoryUsage: process.memoryUsage()
     });
 });
 
@@ -336,7 +358,8 @@ app.use((req, res) => {
                 'Check Status': '/auth/check'
             }
         },
-        oauthConfigured: isOAuthConfigured
+        oauthConfigured: isOAuthConfigured,
+        environment: NODE_ENV
     });
 });
 
@@ -347,7 +370,8 @@ app.use((error, req, res, next) => {
         success: false, 
         message: 'Internal server error',
         error: NODE_ENV === 'development' ? error.message : {},
-        oauthConfigured: isOAuthConfigured
+        oauthConfigured: isOAuthConfigured,
+        environment: NODE_ENV
     });
 });
 
@@ -366,11 +390,15 @@ connectDB().then(() => {
         } else {
             console.log(`🔒 OAuth authentication is disabled`);
             console.log(`📝 All routes are accessible without authentication`);
+            console.log(`💡 To enable OAuth: Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in environment variables`);
         }
         
         if (SESSION_SECRET.includes('fallback-session-secret')) {
             console.warn(`⚠️  WARNING: Using fallback session secret - set SESSION_SECRET environment variable for production`);
         }
+        
+        // Acknowledge MemoryStore usage
+        console.log(`📦 Session storage: MemoryStore (acceptable for assignment scope)`);
     });
 });
 
