@@ -10,6 +10,37 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Environment validation
+console.log('🔧 Environment Check:');
+console.log('   NODE_ENV:', process.env.NODE_ENV || 'not set');
+console.log('   PORT:', process.env.PORT || 'not set');
+console.log('   MONGODB_URI:', process.env.MONGODB_URI ? '✅ Set' : '❌ Not set');
+console.log('   SESSION_SECRET:', process.env.SESSION_SECRET ? '✅ Set' : '❌ Not set');
+console.log('   GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? '✅ Set' : '❌ Not set');
+console.log('   GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? '✅ Set' : '❌ Not set');
+
+// Check critical environment variables
+const criticalEnvVars = ['MONGODB_URI', 'SESSION_SECRET'];
+const missingCritical = criticalEnvVars.filter(key => !process.env[key]);
+
+if (missingCritical.length > 0) {
+  console.error('💥 CRITICAL: Missing required environment variables:', missingCritical);
+  console.error('   The application cannot start without these variables.');
+  process.exit(1);
+}
+
+// Check OAuth configuration
+const isOAuthConfigured = process.env.GOOGLE_CLIENT_ID && 
+                          process.env.GOOGLE_CLIENT_SECRET &&
+                          !process.env.GOOGLE_CLIENT_ID.includes('your_actual') &&
+                          !process.env.GOOGLE_CLIENT_SECRET.includes('your_actual');
+
+if (isOAuthConfigured) {
+  console.log('✅ OAuth is properly configured');
+} else {
+  console.log('🔒 OAuth is disabled - missing or invalid configuration');
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -40,110 +71,143 @@ app.use((req, res, next) => {
 });
 
 // ===== AUTHENTICATION ROUTES =====
-app.get('/auth/google',
+if (isOAuthConfigured) {
+  // OAuth routes when properly configured
+  app.get('/auth/google',
     passport.authenticate('google', { 
-        scope: ['email', 'profile'] 
+      scope: ['email', 'profile'] 
     })
-);
+  );
 
-app.get('/auth/google/callback',
+  app.get('/auth/google/callback',
     passport.authenticate('google', {
-        successRedirect: '/api-docs',
-        failureRedirect: '/auth/failure'
+      successRedirect: '/api-docs',
+      failureRedirect: '/auth/failure'
     })
-);
-
-app.get('/auth/failure', (req, res) => {
-    res.status(401).json({ 
-        success: false,
-        message: 'Failed to authenticate with Google',
-        error: true 
+  );
+  
+  console.log('✅ OAuth authentication routes enabled');
+} else {
+  // Fallback routes when OAuth is not configured
+  app.get('/auth/google', (req, res) => {
+    res.status(503).json({
+      success: false,
+      message: 'OAuth authentication not available',
+      reason: 'Google OAuth credentials not configured in production',
+      instructions: 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables',
+      note: 'This is normal for deployment without OAuth configuration'
     });
+  });
+
+  app.get('/auth/google/callback', (req, res) => {
+    res.status(503).json({
+      success: false,
+      message: 'OAuth callback not available',
+      reason: 'Google OAuth not configured'
+    });
+  });
+  
+  console.log('🔒 OAuth authentication routes disabled (fallback mode)');
+}
+
+// These routes always work
+app.get('/auth/failure', (req, res) => {
+  res.status(401).json({ 
+    success: false,
+    message: 'Authentication failed',
+    configured: isOAuthConfigured
+  });
 });
 
 app.get('/auth/logout', (req, res) => {
-    req.logout(function(err) {
-        if (err) { 
-            return res.status(500).json({ 
-                success: false,
-                message: 'Logout error' 
-            }); 
-        }
-        res.json({ 
-            success: true, 
-            message: 'Successfully logged out' 
-        });
+  req.logout(function(err) {
+    if (err) { 
+      return res.status(500).json({ 
+        success: false,
+        message: 'Logout error' 
+      }); 
+    }
+    res.json({ 
+      success: true, 
+      message: 'Successfully logged out' 
     });
+  });
 });
 
-// Check authentication status
 app.get('/auth/check', (req, res) => {
-    if (req.isAuthenticated()) {
-        res.json({ 
-            success: true,
-            authenticated: true,
-            user: {
-                id: req.user.id,
-                displayName: req.user.displayName,
-                email: req.user.emails[0].value
-            }
-        });
-    } else {
-        res.json({ 
-            success: true,
-            authenticated: false,
-            user: null
-        });
-    }
+  if (req.isAuthenticated()) {
+    res.json({ 
+      success: true,
+      authenticated: true,
+      user: req.user,
+      oauthConfigured: isOAuthConfigured
+    });
+  } else {
+    res.json({ 
+      success: true,
+      authenticated: false,
+      user: null,
+      oauthConfigured: isOAuthConfigured,
+      note: !isOAuthConfigured ? 'OAuth not configured in this environment' : 'Please log in'
+    });
+  }
 });
 
 // Basic routes
 app.get('/', (req, res) => {
-    if (req.isAuthenticated()) {
-        res.json({ 
-            message: '📚 Book Collection API',
-            version: '1.0.0',
-            description: 'A complete CRUD API for managing books and authors',
-            user: req.user.displayName,
-            authenticated: true,
-            endpoints: {
-                'Books': '/api/books',
-                'Authors': '/api/authors',
-                'Health check': '/health',
-                'API Documentation': '/api-docs'
-            },
-            protectedEndpoints: [
-                'POST /api/books',
-                'PUT /api/books/:id', 
-                'DELETE /api/books/:id',
-                'POST /api/authors',
-                'PUT /api/authors/:id',
-                'DELETE /api/authors/:id'
-            ],
-            database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
-        });
-    } else {
-        res.json({ 
-            message: '📚 Book Collection API',
-            version: '1.0.0',
-            description: 'A complete CRUD API for managing books and authors',
-            authenticated: false,
-            endpoints: {
-                'Books': '/api/books',
-                'Authors': '/api/authors',
-                'Health check': '/health',
-                'API Documentation': '/api-docs',
-                'Login': '/auth/google'
-            },
-            publicEndpoints: [
-                'GET /api/books',
-                'GET /api/books/:id',
-                'GET /api/authors', 
-                'GET /api/authors/:id'
-            ],
-            database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
-        });
-    }
+  const response = {
+    message: '📚 Book Collection API',
+    version: '1.0.0',
+    description: 'A complete CRUD API for managing books and authors',
+    environment: process.env.NODE_ENV || 'development',
+    oauthConfigured: isOAuthConfigured,
+    authenticated: req.isAuthenticated() || false,
+    user: req.isAuthenticated() ? req.user.displayName : null,
+    endpoints: {
+      'Books': '/api/books',
+      'Authors': '/api/authors', 
+      'Health check': '/health',
+      'API Documentation': '/api-docs',
+      'Authentication Status': '/auth/check'
+    },
+    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
+  };
+
+  // Add authentication info based on configuration
+  if (isOAuthConfigured) {
+    response.authentication = {
+      login: '/auth/google',
+      logout: '/auth/logout',
+      status: '/auth/check'
+    };
+    response.protectedEndpoints = [
+      'POST /api/books',
+      'PUT /api/books/:id', 
+      'DELETE /api/books/:id',
+      'POST /api/authors',
+      'PUT /api/authors/:id',
+      'DELETE /api/authors/:id'
+    ];
+  } else {
+    response.authentication = {
+      status: 'OAuth not configured',
+      note: 'Protected routes will work without authentication in this mode'
+    };
+    response.publicEndpoints = [
+      'GET /api/books',
+      'GET /api/books/:id',
+      'GET /api/authors', 
+      'GET /api/authors/:id',
+      'POST /api/books',
+      'PUT /api/books/:id',
+      'DELETE /api/books/:id',
+      'POST /api/authors',
+      'PUT /api/authors/:id',
+      'DELETE /api/authors/:id'
+    ];
+  }
+
+  res.json(response);
 });
 
 app.get('/health', (req, res) => {
@@ -153,7 +217,9 @@ app.get('/health', (req, res) => {
         database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
         uptime: process.uptime(),
         swagger: '/api-docs',
-        authenticated: req.isAuthenticated() || false
+        authenticated: req.isAuthenticated() || false,
+        oauthConfigured: isOAuthConfigured,
+        environment: process.env.NODE_ENV || 'development'
     });
 });
 
@@ -262,7 +328,8 @@ app.use((req, res) => {
                 'Logout': '/auth/logout',
                 'Check Status': '/auth/check'
             }
-        }
+        },
+        oauthConfigured: isOAuthConfigured
     });
 });
 
@@ -272,7 +339,8 @@ app.use((error, req, res, next) => {
     res.status(500).json({ 
         success: false, 
         message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? error.message : {}
+        error: process.env.NODE_ENV === 'development' ? error.message : {},
+        oauthConfigured: isOAuthConfigured
     });
 });
 
@@ -282,10 +350,16 @@ connectDB().then(() => {
         console.log(`🚀 Server is running on port ${PORT}`);
         console.log(`📍 Local: http://localhost:${PORT}`);
         console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
-        console.log(`🔐 Authentication: http://localhost:${PORT}/auth/google`);
         console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
         console.log(`🗄️  Database: ${mongoose.connection.readyState === 1 ? 'Connected' : 'Connecting...'}`);
-        console.log(`✅ All routes enabled - OAuth authentication ready!`);
+        
+        if (isOAuthConfigured) {
+            console.log(`🔐 Authentication: http://localhost:${PORT}/auth/google`);
+            console.log(`✅ OAuth authentication is enabled and ready!`);
+        } else {
+            console.log(`🔒 OAuth authentication is disabled`);
+            console.log(`📝 All routes are accessible without authentication`);
+        }
     });
 });
 
