@@ -49,8 +49,22 @@ if (isOAuthConfigured) {
   console.log('🔒 OAuth is disabled - missing or invalid configuration');
 }
 
-// Middleware
-app.use(cors());
+// CORS configuration - FIXED
+app.use(cors({
+    origin: [
+        'http://localhost:3000',
+        'https://localhost:3000', 
+        'https://book-collection-api-0vgp.onrender.com',
+        'https://book-collection-api-0vgp.onrender.com/'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
+
+// Handle preflight requests
+app.options('*', cors());
+
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -263,7 +277,7 @@ const connectDB = async () => {
     }
 };
 
-// Swagger configuration
+// Swagger configuration - UPDATED with full HTTPS URLs
 const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
@@ -278,12 +292,12 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: 'http://localhost:3000',
-        description: 'Development server',
+        url: 'https://book-collection-api-0vgp.onrender.com', // Production first
+        description: 'Production server',
       },
       {
-        url: 'https://book-collection-api-0vgp.onrender.com',
-        description: 'Production server',
+        url: 'http://localhost:3000',
+        description: 'Development server',
       },
     ],
     components: {
@@ -314,8 +328,8 @@ const swaggerOptions = {
           type: 'oauth2',
           flows: {
             authorizationCode: {
-              authorizationUrl: '/auth/google',
-              tokenUrl: '/auth/google/callback',
+              authorizationUrl: 'https://book-collection-api-0vgp.onrender.com/auth/google', // Full HTTPS URL
+              tokenUrl: 'https://book-collection-api-0vgp.onrender.com/auth/google/callback', // Full HTTPS URL
               scopes: {}
             }
           }
@@ -385,7 +399,7 @@ connectDB().then(() => {
         console.log(`🗄️  Database: ${mongoose.connection.readyState === 1 ? 'Connected' : 'Connecting...'}`);
         
         if (isOAuthConfigured) {
-            console.log(`🔐 Authentication: http://localhost:${PORT}/auth/google`);
+            console.log(`🔐 Authentication: https://book-collection-api-0vgp.onrender.com/auth/google`);
             console.log(`✅ OAuth authentication is enabled and ready!`);
         } else {
             console.log(`🔒 OAuth authentication is disabled`);
@@ -399,6 +413,7 @@ connectDB().then(() => {
         
         // Acknowledge MemoryStore usage
         console.log(`📦 Session storage: MemoryStore (acceptable for assignment scope)`);
+        console.log(`🌐 CORS configured for: localhost:3000 and book-collection-api-0vgp.onrender.com`);
     });
 });
 
