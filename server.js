@@ -8,32 +8,40 @@ const swaggerUi = require('swagger-ui-express');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-// Environment validation
+// Permanent environment validation with fallbacks
+const getEnvVar = (key, defaultValue, isCritical = false) => {
+  const value = process.env[key] || defaultValue;
+  
+  if (!value && isCritical) {
+    console.error(`💥 CRITICAL: Missing required environment variable: ${key}`);
+    console.error('   The application cannot start without this variable.');
+    process.exit(1);
+  }
+  
+  if (!value) {
+    console.warn(`⚠️  Warning: Missing environment variable: ${key} - using fallback`);
+  } else {
+    console.log(`✅ ${key}: Set`);
+  }
+  
+  return value;
+};
+
 console.log('🔧 Environment Check:');
-console.log('   NODE_ENV:', process.env.NODE_ENV || 'not set');
-console.log('   PORT:', process.env.PORT || 'not set');
-console.log('   MONGODB_URI:', process.env.MONGODB_URI ? '✅ Set' : '❌ Not set');
-console.log('   SESSION_SECRET:', process.env.SESSION_SECRET ? '✅ Set' : '❌ Not set');
-console.log('   GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? '✅ Set' : '❌ Not set');
-console.log('   GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? '✅ Set' : '❌ Not set');
 
-// Check critical environment variables
-const criticalEnvVars = ['MONGODB_URI', 'SESSION_SECRET'];
-const missingCritical = criticalEnvVars.filter(key => !process.env[key]);
+// Get environment variables with fallbacks
+const MONGODB_URI = getEnvVar('MONGODB_URI', null, true); // Critical
+const SESSION_SECRET = getEnvVar('SESSION_SECRET', 'fallback-session-secret-change-in-production');
+const NODE_ENV = getEnvVar('NODE_ENV', 'development');
+const PORT = getEnvVar('PORT', '3000');
 
-if (missingCritical.length > 0) {
-  console.error('💥 CRITICAL: Missing required environment variables:', missingCritical);
-  console.error('   The application cannot start without these variables.');
-  process.exit(1);
-}
-
-// Check OAuth configuration
-const isOAuthConfigured = process.env.GOOGLE_CLIENT_ID && 
-                          process.env.GOOGLE_CLIENT_SECRET &&
-                          !process.env.GOOGLE_CLIENT_ID.includes('your_actual') &&
-                          !process.env.GOOGLE_CLIENT_SECRET.includes('your_actual');
+// OAuth configuration (optional)
+const GOOGLE_CLIENT_ID = getEnvVar('GOOGLE_CLIENT_ID', '');
+const GOOGLE_CLIENT_SECRET = getEnvVar('GOOGLE_CLIENT_SECRET', '');
+const isOAuthConfigured = GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && 
+                          !GOOGLE_CLIENT_ID.includes('your_actual') && 
+                          !GOOGLE_CLIENT_SECRET.includes('your_actual');
 
 if (isOAuthConfigured) {
   console.log('✅ OAuth is properly configured');
@@ -48,11 +56,11 @@ app.use(express.static('public'));
 
 // Session configuration
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'fallback-secret-key',
+    secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: NODE_ENV === 'production',
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
@@ -93,9 +101,8 @@ if (isOAuthConfigured) {
     res.status(503).json({
       success: false,
       message: 'OAuth authentication not available',
-      reason: 'Google OAuth credentials not configured in production',
-      instructions: 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables',
-      note: 'This is normal for deployment without OAuth configuration'
+      reason: 'Google OAuth credentials not configured',
+      instructions: 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables'
     });
   });
 
@@ -159,7 +166,7 @@ app.get('/', (req, res) => {
     message: '📚 Book Collection API',
     version: '1.0.0',
     description: 'A complete CRUD API for managing books and authors',
-    environment: process.env.NODE_ENV || 'development',
+    environment: NODE_ENV,
     oauthConfigured: isOAuthConfigured,
     authenticated: req.isAuthenticated() || false,
     user: req.isAuthenticated() ? req.user.displayName : null,
@@ -219,14 +226,14 @@ app.get('/health', (req, res) => {
         swagger: '/api-docs',
         authenticated: req.isAuthenticated() || false,
         oauthConfigured: isOAuthConfigured,
-        environment: process.env.NODE_ENV || 'development'
+        environment: NODE_ENV
     });
 });
 
 // MongoDB Connection
 const connectDB = async () => {
     try {
-        await mongoose.connect(process.env.MONGODB_URI);
+        await mongoose.connect(MONGODB_URI);
         console.log('✅ Connected to MongoDB successfully');
     } catch (error) {
         console.error('❌ MongoDB connection error:', error.message);
@@ -294,7 +301,7 @@ const swaggerOptions = {
       }
     }
   },
-  apis: ['./routes/*.js'], // path to your API routes
+  apis: ['./routes/*.js'],
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
@@ -307,11 +314,11 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 
 // Import routes
 const bookRoutes = require('./routes/bookRoutes');
-const authorRoutesSimple = require('./routes/authorRoutes-simple'); // Use simple author routes
+const authorRoutesSimple = require('./routes/authorRoutes-simple');
 
 // Routes
 app.use('/api/books', bookRoutes);
-app.use('/api/authors', authorRoutesSimple); // Enable author routes
+app.use('/api/authors', authorRoutesSimple);
 
 // 404 handler
 app.use((req, res) => {
@@ -339,7 +346,7 @@ app.use((error, req, res, next) => {
     res.status(500).json({ 
         success: false, 
         message: 'Internal server error',
-        error: process.env.NODE_ENV === 'development' ? error.message : {},
+        error: NODE_ENV === 'development' ? error.message : {},
         oauthConfigured: isOAuthConfigured
     });
 });
@@ -350,7 +357,7 @@ connectDB().then(() => {
         console.log(`🚀 Server is running on port ${PORT}`);
         console.log(`📍 Local: http://localhost:${PORT}`);
         console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
-        console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`🌐 Environment: ${NODE_ENV}`);
         console.log(`🗄️  Database: ${mongoose.connection.readyState === 1 ? 'Connected' : 'Connecting...'}`);
         
         if (isOAuthConfigured) {
@@ -359,6 +366,10 @@ connectDB().then(() => {
         } else {
             console.log(`🔒 OAuth authentication is disabled`);
             console.log(`📝 All routes are accessible without authentication`);
+        }
+        
+        if (SESSION_SECRET.includes('fallback-session-secret')) {
+            console.warn(`⚠️  WARNING: Using fallback session secret - set SESSION_SECRET environment variable for production`);
         }
     });
 });
