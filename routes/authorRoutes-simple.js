@@ -1,89 +1,46 @@
 const express = require('express');
 const router = express.Router();
-const {
-    getAllBooks,
-    getBookById,
-    createBook,
-    updateBook,
-    deleteBook
-} = require('../controllers/bookController');
-const { validateBook, validateObjectId } = require('../middleware/validation');
-
-// Lazy load authentication middleware to avoid circular dependencies
-const getAuthMiddleware = () => {
-    return require('../middleware/auth');
-};
 
 /**
  * @swagger
  * components:
  *   schemas:
- *     Book:
+ *     Author:
  *       type: object
  *       required:
- *         - title
- *         - author
- *         - isbn
- *         - publicationYear
- *         - genre
- *         - publisher
- *         - pageCount
+ *         - name
+ *         - birthYear
+ *         - nationality
  *       properties:
- *         title:
+ *         name:
  *           type: string
- *           example: The Great Gatsby
- *         author:
+ *           example: J.K. Rowling
+ *         bio:
  *           type: string
- *           example: F. Scott Fitzgerald
- *         isbn:
- *           type: string
- *           example: "9780743273565"
- *         publicationYear:
+ *           example: British author best known for the Harry Potter series
+ *         birthYear:
  *           type: integer
- *           example: 1925
- *         genre:
+ *           example: 1965
+ *         nationality:
  *           type: string
- *           example: Fiction
- *         publisher:
+ *           example: British
+ *         website:
  *           type: string
- *           example: Scribner
- *         pageCount:
- *           type: integer
- *           example: 180
- *         description:
- *           type: string
- *           example: A classic novel of the Jazz Age
- *         language:
- *           type: string
- *           example: English
- *         isAvailable:
+ *           example: https://www.jkrowling.com
+ *         isActive:
  *           type: boolean
  *           example: true
- *     Error:
- *       type: object
- *       properties:
- *         success:
- *           type: boolean
- *           example: false
- *         message:
- *           type: string
- *           example: Validation failed
- *         errors:
- *           type: array
- *           items:
- *             type: string
- *           example: ["Title is required", "Author is required"]
  */
 
 /**
  * @swagger
- * /api/books:
+ * /api/authors:
  *   get:
- *     summary: Get all books
- *     tags: [Books]
+ *     summary: Get all authors
+ *     tags: [Authors]
  *     responses:
  *       200:
- *         description: Successfully retrieved all books
+ *         description: Successfully retrieved all authors
  *         content:
  *           application/json:
  *             schema:
@@ -95,7 +52,7 @@ const getAuthMiddleware = () => {
  *                 data:
  *                   type: array
  *                   items:
- *                     $ref: '#/components/schemas/Book'
+ *                     $ref: '#/components/schemas/Author'
  *                 count:
  *                   type: integer
  *                   example: 5
@@ -106,25 +63,31 @@ const getAuthMiddleware = () => {
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/', getAllBooks);
+router.get('/', (req, res) => {
+    res.json({ 
+        success: true, 
+        message: 'Get all authors - working!',
+        data: []
+    });
+});
 
 /**
  * @swagger
- * /api/books/{id}:
+ * /api/authors/{id}:
  *   get:
- *     summary: Get a specific book by ID
- *     tags: [Books]
+ *     summary: Get a specific author by ID
+ *     tags: [Authors]
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
- *         description: MongoDB ObjectId of the book
+ *         description: MongoDB ObjectId of the author
  *         example: "651a1b2c3d4e5f6789012345"
  *     responses:
  *       200:
- *         description: Successfully retrieved the book
+ *         description: Successfully retrieved the author
  *         content:
  *           application/json:
  *             schema:
@@ -134,7 +97,7 @@ router.get('/', getAllBooks);
  *                   type: boolean
  *                   example: true
  *                 data:
- *                   $ref: '#/components/schemas/Book'
+ *                   $ref: '#/components/schemas/Author'
  *       400:
  *         description: Invalid ID format
  *         content:
@@ -142,7 +105,7 @@ router.get('/', getAllBooks);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  *       404:
- *         description: Book not found
+ *         description: Author not found
  *         content:
  *           application/json:
  *             schema:
@@ -154,23 +117,31 @@ router.get('/', getAllBooks);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/:id', validateObjectId, getBookById);
+router.get('/:id', (req, res) => {
+    res.json({ 
+        success: true, 
+        message: `Get author by ID: ${req.params.id}`,
+        data: null
+    });
+});
 
 /**
  * @swagger
- * /api/books:
+ * /api/authors:
  *   post:
- *     summary: Create a new book
- *     tags: [Books]
+ *     summary: Create a new author
+ *     tags: [Authors]
+ *     security:
+ *       - oauth2: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/Book'
+ *             $ref: '#/components/schemas/Author'
  *     responses:
  *       201:
- *         description: Book created successfully
+ *         description: Author created successfully
  *         content:
  *           application/json:
  *             schema:
@@ -181,9 +152,18 @@ router.get('/:id', validateObjectId, getBookById);
  *                   example: true
  *                 message:
  *                   type: string
- *                   example: Book created successfully
+ *                   example: Author created successfully
  *                 data:
- *                   $ref: '#/components/schemas/Book'
+ *                   $ref: '#/components/schemas/Author'
+ *                 user:
+ *                   type: string
+ *                   example: Henry Osuagwu
+ *       401:
+ *         description: Unauthorized - Please log in
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       400:
  *         description: Validation error - missing or invalid data
  *         content:
@@ -197,31 +177,46 @@ router.get('/:id', validateObjectId, getBookById);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/', (req, res, next) => getAuthMiddleware()(req, res, next), validateBook, createBook); // PROTECTED
+router.post('/', (req, res) => {
+    if (!req.isAuthenticated()) {
+        return res.status(401).json({ 
+            success: false,
+            message: 'Please log in to create authors'
+        });
+    }
+    res.json({ 
+        success: true, 
+        message: 'Author created successfully by authenticated user!',
+        data: req.body,
+        user: req.user.displayName
+    });
+});
 
 /**
  * @swagger
- * /api/books/{id}:
+ * /api/authors/{id}:
  *   put:
- *     summary: Update a book by ID
- *     tags: [Books]
+ *     summary: Update an author by ID
+ *     tags: [Authors]
+ *     security:
+ *       - oauth2: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
- *         description: MongoDB ObjectId of the book to update
+ *         description: MongoDB ObjectId of the author to update
  *         example: "651a1b2c3d4e5f6789012345"
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/Book'
+ *             $ref: '#/components/schemas/Author'
  *     responses:
  *       200:
- *         description: Book updated successfully
+ *         description: Author updated successfully
  *         content:
  *           application/json:
  *             schema:
@@ -232,9 +227,18 @@ router.post('/', (req, res, next) => getAuthMiddleware()(req, res, next), valida
  *                   example: true
  *                 message:
  *                   type: string
- *                   example: Book updated successfully
+ *                   example: Author updated successfully
  *                 data:
- *                   $ref: '#/components/schemas/Book'
+ *                   $ref: '#/components/schemas/Author'
+ *                 user:
+ *                   type: string
+ *                   example: Henry Osuagwu
+ *       401:
+ *         description: Unauthorized - Please log in
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       400:
  *         description: Validation error or invalid ID format
  *         content:
@@ -242,7 +246,7 @@ router.post('/', (req, res, next) => getAuthMiddleware()(req, res, next), valida
  *             schema:
  *               $ref: '#/components/schemas/Error'
  *       404:
- *         description: Book not found
+ *         description: Author not found
  *         content:
  *           application/json:
  *             schema:
@@ -254,25 +258,40 @@ router.post('/', (req, res, next) => getAuthMiddleware()(req, res, next), valida
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.put('/:id', (req, res, next) => getAuthMiddleware()(req, res, next), validateObjectId, validateBook, updateBook); // PROTECTED
+router.put('/:id', (req, res) => {
+    if (!req.isAuthenticated()) {
+        return res.status(401).json({ 
+            success: false,
+            message: 'Please log in to update authors'
+        });
+    }
+    res.json({ 
+        success: true, 
+        message: `Author ${req.params.id} updated successfully!`,
+        data: req.body,
+        user: req.user.displayName
+    });
+});
 
 /**
  * @swagger
- * /api/books/{id}:
+ * /api/authors/{id}:
  *   delete:
- *     summary: Delete a book by ID
- *     tags: [Books]
+ *     summary: Delete an author by ID
+ *     tags: [Authors]
+ *     security:
+ *       - oauth2: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
- *         description: MongoDB ObjectId of the book to delete
+ *         description: MongoDB ObjectId of the author to delete
  *         example: "651a1b2c3d4e5f6789012345"
  *     responses:
  *       200:
- *         description: Book deleted successfully
+ *         description: Author deleted successfully
  *         content:
  *           application/json:
  *             schema:
@@ -283,9 +302,16 @@ router.put('/:id', (req, res, next) => getAuthMiddleware()(req, res, next), vali
  *                   example: true
  *                 message:
  *                   type: string
- *                   example: Book deleted successfully
- *                 data:
- *                   $ref: '#/components/schemas/Book'
+ *                   example: Author deleted successfully
+ *                 user:
+ *                   type: string
+ *                   example: Henry Osuagwu
+ *       401:
+ *         description: Unauthorized - Please log in
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       400:
  *         description: Invalid ID format
  *         content:
@@ -293,7 +319,7 @@ router.put('/:id', (req, res, next) => getAuthMiddleware()(req, res, next), vali
  *             schema:
  *               $ref: '#/components/schemas/Error'
  *       404:
- *         description: Book not found
+ *         description: Author not found
  *         content:
  *           application/json:
  *             schema:
@@ -305,6 +331,18 @@ router.put('/:id', (req, res, next) => getAuthMiddleware()(req, res, next), vali
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.delete('/:id', (req, res, next) => getAuthMiddleware()(req, res, next), validateObjectId, deleteBook); // PROTECTED
+router.delete('/:id', (req, res) => {
+    if (!req.isAuthenticated()) {
+        return res.status(401).json({ 
+            success: false,
+            message: 'Please log in to delete authors'
+        });
+    }
+    res.json({ 
+        success: true, 
+        message: `Author ${req.params.id} deleted successfully!`,
+        user: req.user.displayName
+    });
+});
 
 module.exports = router;

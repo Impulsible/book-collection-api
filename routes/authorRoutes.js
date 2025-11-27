@@ -7,7 +7,8 @@ const {
     updateAuthor,
     deleteAuthor
 } = require('../controllers/authorController');
-const { validateObjectId } = require('../middleware/validation');
+const { validateAuthor, validateObjectId } = require('../middleware/validation');
+const isAuthenticated = require('../middleware/auth'); // ADDED
 
 // GET all authors
 router.get('/', getAllAuthors);
@@ -15,13 +16,13 @@ router.get('/', getAllAuthors);
 // GET single author by ID
 router.get('/:id', validateObjectId, getAuthorById);
 
-// POST create new author
-router.post('/', createAuthor);
+// POST create new author - PROTECTED
+router.post('/', isAuthenticated, validateAuthor, createAuthor);
 
-// PUT update author by ID
-router.put('/:id', validateObjectId, updateAuthor);
+// PUT update author by ID - PROTECTED
+router.put('/:id', isAuthenticated, validateObjectId, validateAuthor, updateAuthor);
 
-// DELETE author by ID
-router.delete('/:id', validateObjectId, deleteAuthor);
+// DELETE author by ID - PROTECTED
+router.delete('/:id', isAuthenticated, validateObjectId, deleteAuthor);
 
 module.exports = router;
