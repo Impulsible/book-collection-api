@@ -49,21 +49,19 @@ if (isOAuthConfigured) {
   console.log('🔒 OAuth is disabled - missing or invalid configuration');
 }
 
-// CORS configuration - FIXED
+// CORS configuration - FIXED (removed problematic app.options line)
 app.use(cors({
     origin: [
         'http://localhost:3000',
         'https://localhost:3000', 
-        'https://book-collection-api-0vgp.onrender.com',
-        'https://book-collection-api-0vgp.onrender.com/'
+        'https://book-collection-api-0vgp.onrender.com'
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Handle preflight requests
-app.options('*', cors());
+// REMOVED the problematic line: app.options('*', cors());
 
 app.use(express.json());
 app.use(express.static('public'));
