@@ -19,6 +19,40 @@
       "description": "Production server"
     }
   ],
+  "components": {
+    "securitySchemes": {
+      "googleOAuth2": {
+        "type": "oauth2",
+        "description": "Google OAuth2 authentication",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://book-collection-api-0vgp.onrender.com/auth/google",
+            "tokenUrl": "https://book-collection-api-0vgp.onrender.com/auth/google/callback",
+            "scopes": {
+              "profile": "Access your profile information",
+              "email": "Access your email address"
+            }
+          }
+        }
+      },
+      "sessionAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sessionId",
+        "description": "Session ID cookie for authenticated requests"
+      },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "JWT or session token bearer authentication"
+      }
+    }
+  },
+  "security": [
+    {
+      "googleOAuth2": ["profile", "email"]
+    }
+  ],
   "paths": {
     "/api/books": {
       "get": {
@@ -45,6 +79,13 @@
       "post": {
         "summary": "Create a new book",
         "description": "Add a new book to the library collection with data validation",
+        "security": [
+          {
+            "googleOAuth2": ["profile", "email"],
+            "sessionAuth": [],
+            "bearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -74,6 +115,9 @@
           "400": {
             "description": "Validation error - missing or invalid data"
           },
+          "401": {
+            "description": "Unauthorized - please log in"
+          },
           "500": {
             "description": "Internal server error"
           }
@@ -101,6 +145,13 @@
       "put": {
         "summary": "Update book by ID",
         "description": "Update an existing book with data validation",
+        "security": [
+          {
+            "googleOAuth2": ["profile", "email"],
+            "sessionAuth": [],
+            "bearerAuth": []
+          }
+        ],
         "parameters": [{
           "name": "id",
           "in": "path",
@@ -132,6 +183,7 @@
         "responses": {
           "200": {"description": "Book updated successfully"},
           "400": {"description": "Validation error"},
+          "401": {"description": "Unauthorized - please log in"},
           "404": {"description": "Book not found"},
           "500": {"description": "Internal server error"}
         }
@@ -139,6 +191,13 @@
       "delete": {
         "summary": "Delete book by ID",
         "description": "Remove a book from the library collection",
+        "security": [
+          {
+            "googleOAuth2": ["profile", "email"],
+            "sessionAuth": [],
+            "bearerAuth": []
+          }
+        ],
         "parameters": [{
           "name": "id",
           "in": "path",
@@ -149,6 +208,7 @@
         "responses": {
           "200": {"description": "Book deleted successfully"},
           "400": {"description": "Invalid ID format"},
+          "401": {"description": "Unauthorized - please log in"},
           "404": {"description": "Book not found"},
           "500": {"description": "Internal server error"}
         }
@@ -177,6 +237,13 @@
       "post": {
         "summary": "Create new member",
         "description": "Register a new library member with data validation",
+        "security": [
+          {
+            "googleOAuth2": ["profile", "email"],
+            "sessionAuth": [],
+            "bearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -199,6 +266,7 @@
         "responses": {
           "201": {"description": "Member created successfully"},
           "400": {"description": "Validation error"},
+          "401": {"description": "Unauthorized - please log in"},
           "500": {"description": "Internal server error"}
         }
       }
@@ -222,6 +290,13 @@
       },
       "put": {
         "summary": "Update member by ID",
+        "security": [
+          {
+            "googleOAuth2": ["profile", "email"],
+            "sessionAuth": [],
+            "bearerAuth": []
+          }
+        ],
         "parameters": [{
           "name": "id",
           "in": "path",
@@ -232,12 +307,20 @@
         "responses": {
           "200": {"description": "Member updated"},
           "400": {"description": "Validation error"},
+          "401": {"description": "Unauthorized - please log in"},
           "404": {"description": "Member not found"},
           "500": {"description": "Internal server error"}
         }
       },
       "delete": {
         "summary": "Delete member by ID",
+        "security": [
+          {
+            "googleOAuth2": ["profile", "email"],
+            "sessionAuth": [],
+            "bearerAuth": []
+          }
+        ],
         "parameters": [{
           "name": "id",
           "in": "path",
@@ -248,6 +331,7 @@
         "responses": {
           "200": {"description": "Member deleted"},
           "400": {"description": "Invalid ID format"},
+          "401": {"description": "Unauthorized - please log in"},
           "404": {"description": "Member not found"},
           "500": {"description": "Internal server error"}
         }
@@ -267,6 +351,88 @@
                   "timestamp": "2024-11-20T16:30:00.000Z",
                   "database": "Connected",
                   "uptime": 123.45
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/google": {
+      "get": {
+        "summary": "Start Google OAuth2 authentication",
+        "description": "Redirects to Google OAuth2 for authentication",
+        "responses": {
+          "302": {
+            "description": "Redirect to Google OAuth2"
+          }
+        }
+      }
+    },
+    "/auth/google/callback": {
+      "get": {
+        "summary": "Google OAuth2 callback",
+        "description": "Handles the callback from Google OAuth2 authentication",
+        "responses": {
+          "200": {
+            "description": "Authentication successful",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Successfully authenticated with Google",
+                  "user": {
+                    "id": "112530519125866030789",
+                    "displayName": "John Doe",
+                    "email": "john.doe@example.com"
+                  },
+                  "sessionId": "abc123sessionid",
+                  "authenticated": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed"
+          }
+        }
+      }
+    },
+    "/auth/check": {
+      "get": {
+        "summary": "Check authentication status",
+        "description": "Check if the current user is authenticated",
+        "responses": {
+          "200": {
+            "description": "Authentication status",
+            "content": {
+              "application/json": {
+                "example": {
+                  "authenticated": true,
+                  "user": {
+                    "id": "112530519125866030789",
+                    "displayName": "John Doe",
+                    "email": "john.doe@example.com"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Logout user",
+        "description": "End the current user session",
+        "responses": {
+          "200": {
+            "description": "Logout successful",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Successfully logged out"
                 }
               }
             }
