@@ -5,6 +5,7 @@ const session = require('express-session');
 const passport = require('passport');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
+const MongoStore = require('connect-mongo'); // ADD THIS
 require('dotenv').config();
 
 const app = express();
@@ -61,27 +62,28 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// REMOVED the problematic line: app.options('*', cors());
-
 app.use(express.json());
 app.use(express.static('public'));
 
-// Session configuration with MemoryStore acknowledgment
+// ===== UPDATED SESSION CONFIGURATION =====
+// Session configuration with MongoDB Store (FIXED)
 app.use(session({
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
         secure: NODE_ENV === 'production',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: NODE_ENV === 'production' ? 'none' : 'lax'
     },
-    store: new session.MemoryStore() // Explicitly using MemoryStore
+    store: MongoStore.create({
+        mongoUrl: MONGODB_URI,
+        collectionName: 'sessions',
+        ttl: 24 * 60 * 60 // 24 hours in seconds
+    })
 }));
 
-// Add note about MemoryStore for production
-if (NODE_ENV === 'production') {
-    console.log('📝 Note: Using MemoryStore for sessions - acceptable for this assignment scope');
-}
+console.log(`📦 Session storage: MongoDB (persistent across server restarts)`);
 
 // Initialize passport
 app.use(passport.initialize());
@@ -105,12 +107,19 @@ if (isOAuthConfigured) {
     })
   );
 
-  // FIXED: Google callback returns JSON instead of redirecting to Swagger UI
+  // UPDATED: Enhanced Google callback with better debugging
   app.get('/auth/google/callback',
     passport.authenticate('google', {
-      failureRedirect: '/auth/failure'
+      failureRedirect: '/auth/failure',
+      failureMessage: true
     }),
     (req, res) => {
+      console.log('✅ Successful authentication:');
+      console.log('  - User ID:', req.user.id);
+      console.log('  - Display Name:', req.user.displayName);
+      console.log('  - Session ID:', req.sessionID);
+      console.log('  - isAuthenticated:', req.isAuthenticated());
+      
       // Successful authentication - return JSON response
       res.json({
         success: true,
@@ -120,6 +129,7 @@ if (isOAuthConfigured) {
           displayName: req.user.displayName,
           email: req.user.emails[0].value
         },
+        sessionId: req.sessionID,
         authenticated: true,
         endpoints: {
           'API Documentation': '/api-docs',
@@ -134,7 +144,7 @@ if (isOAuthConfigured) {
             'DELETE /api/authors/:id'
           ]
         },
-        note: 'You can now access protected routes. Visit /api-docs for API documentation.'
+        note: 'You can now access protected routes. Your session is stored in MongoDB.'
       });
     }
   );
@@ -174,6 +184,7 @@ app.get('/auth/failure', (req, res) => {
 });
 
 app.get('/auth/logout', (req, res) => {
+  console.log('🔐 Logout - Session ID:', req.sessionID);
   req.logout(function(err) {
     if (err) { 
       return res.status(500).json({ 
@@ -184,28 +195,41 @@ app.get('/auth/logout', (req, res) => {
     res.json({ 
       success: true, 
       message: 'Successfully logged out',
-      note: 'Session cleared from MemoryStore'
+      note: 'Session cleared from MongoDB'
     });
   });
 });
 
+// UPDATED: Enhanced auth check with detailed debugging
 app.get('/auth/check', (req, res) => {
+  console.log('🔐 Auth Check Debug:');
+  console.log('  - Session ID:', req.sessionID);
+  console.log('  - isAuthenticated:', req.isAuthenticated());
+  console.log('  - User:', req.user);
+  console.log('  - Session keys:', req.session ? Object.keys(req.session) : 'No session');
+  
   if (req.isAuthenticated()) {
     res.json({ 
       success: true,
       authenticated: true,
-      user: req.user,
+      user: {
+        id: req.user.id,
+        displayName: req.user.displayName,
+        email: req.user.emails?.[0]?.value
+      },
+      sessionId: req.sessionID,
       oauthConfigured: isOAuthConfigured,
-      sessionStore: 'MemoryStore'
+      sessionStore: 'MongoDB'
     });
   } else {
     res.json({ 
       success: true,
       authenticated: false,
       user: null,
+      sessionId: req.sessionID,
       oauthConfigured: isOAuthConfigured,
-      sessionStore: 'MemoryStore',
-      note: !isOAuthConfigured ? 'OAuth not configured in production environment' : 'Please log in to access protected routes'
+      sessionStore: 'MongoDB',
+      note: 'Please log in to access protected routes'
     });
   }
 });
@@ -220,7 +244,7 @@ app.get('/', (req, res) => {
     oauthConfigured: isOAuthConfigured,
     authenticated: req.isAuthenticated() || false,
     user: req.isAuthenticated() ? req.user.displayName : null,
-    sessionStore: 'MemoryStore',
+    sessionStore: 'MongoDB', // UPDATED
     endpoints: {
       'Books': '/api/books',
       'Authors': '/api/authors', 
@@ -248,7 +272,8 @@ app.get('/', (req, res) => {
     ];
     response.notes = [
       'OAuth authentication is enabled and functional',
-      'Protected routes require Google login'
+      'Protected routes require Google login',
+      'Sessions are stored in MongoDB (persistent)'
     ];
   } else {
     response.authentication = {
@@ -269,7 +294,7 @@ app.get('/', (req, res) => {
     ];
     response.notes = [
       'To enable OAuth: Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Render environment variables',
-      'Using MemoryStore for sessions (acceptable for assignment scope)'
+      'Using MongoDB for sessions (persistent storage)'
     ];
   }
 
@@ -286,7 +311,7 @@ app.get('/health', (req, res) => {
         authenticated: req.isAuthenticated() || false,
         oauthConfigured: isOAuthConfigured,
         environment: NODE_ENV,
-        sessionStore: 'MemoryStore',
+        sessionStore: 'MongoDB', // UPDATED
         memoryUsage: process.memoryUsage()
     });
 });
@@ -317,7 +342,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: 'https://book-collection-api-0vgp.onrender.com', // Production first
+        url: 'https://book-collection-api-0vgp.onrender.com',
         description: 'Production server',
       },
       {
@@ -353,8 +378,8 @@ const swaggerOptions = {
           type: 'oauth2',
           flows: {
             authorizationCode: {
-              authorizationUrl: 'https://book-collection-api-0vgp.onrender.com/auth/google', // Full HTTPS URL
-              tokenUrl: 'https://book-collection-api-0vgp.onrender.com/auth/google/callback', // Full HTTPS URL
+              authorizationUrl: 'https://book-collection-api-0vgp.onrender.com/auth/google',
+              tokenUrl: 'https://book-collection-api-0vgp.onrender.com/auth/google/callback',
               scopes: {}
             }
           }
@@ -373,72 +398,13 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   customCss: '.swagger-ui .topbar { display: none }'
 }));
 
-// ===== DEBUG ROUTE IMPORTS =====
-console.log('🔧 Debugging route imports...');
-
-// Test each import individually
-try {
-  console.log('1. Testing bookController...');
-  const bookController = require('./controllers/bookController');
-  console.log('✅ bookController loaded:', typeof bookController);
-  console.log('   - getAllBooks:', typeof bookController.getAllBooks);
-  console.log('   - createBook:', typeof bookController.createBook);
-} catch (error) {
-  console.error('❌ bookController error:', error.message);
-}
-
-try {
-  console.log('2. Testing validation middleware...');
-  const validation = require('./middleware/validation');
-  console.log('✅ validation loaded:', typeof validation);
-  console.log('   - validateBook:', typeof validation.validateBook);
-  console.log('   - validateObjectId:', typeof validation.validateObjectId);
-} catch (error) {
-  console.error('❌ validation error:', error.message);
-}
-
-try {
-  console.log('3. Testing auth middleware...');
-  const auth = require('./middleware/auth');
-  console.log('✅ auth loaded:', typeof auth);
-} catch (error) {
-  console.error('❌ auth error:', error.message);
-}
-
-try {
-  console.log('4. Testing book model...');
-  const bookModel = require('./models/book');
-  console.log('✅ book model loaded');
-} catch (error) {
-  console.error('❌ book model error:', error.message);
-}
-
-try {
-  console.log('5. Testing bookRoutes...');
-  const bookRoutes = require('./routes/bookRoutes');
-  console.log('✅ bookRoutes loaded, type:', typeof bookRoutes);
-} catch (error) {
-  console.error('❌ bookRoutes error:', error.message);
-}
-
-try {
-  console.log('6. Testing authorRoutesSimple...');
-  const authorRoutesSimple = require('./routes/authorRoutes-simple');
-  console.log('✅ authorRoutesSimple loaded, type:', typeof authorRoutesSimple);
-} catch (error) {
-  console.error('❌ authorRoutesSimple error:', error.message);
-}
-
-// Now import them properly for use
-console.log('7. Final imports for use...');
+// Import routes
 const bookRoutes = require('./routes/bookRoutes');
 const authorRoutesSimple = require('./routes/authorRoutes-simple');
 
 // Routes
-console.log('8. Setting up routes...');
 app.use('/api/books', bookRoutes);
 app.use('/api/authors', authorRoutesSimple);
-console.log('✅ All routes set up successfully');
 
 // 404 handler
 app.use((req, res) => {
@@ -495,8 +461,8 @@ connectDB().then(() => {
             console.warn(`⚠️  WARNING: Using fallback session secret - set SESSION_SECRET environment variable for production`);
         }
         
-        // Acknowledge MemoryStore usage
-        console.log(`📦 Session storage: MemoryStore (acceptable for assignment scope)`);
+        // UPDATED: MongoDB session storage
+        console.log(`📦 Session storage: MongoDB (persistent across server restarts)`);
         console.log(`🌐 CORS configured for: localhost:3000 and book-collection-api-0vgp.onrender.com`);
     });
 });
