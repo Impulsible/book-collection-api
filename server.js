@@ -105,11 +105,38 @@ if (isOAuthConfigured) {
     })
   );
 
+  // FIXED: Google callback returns JSON instead of redirecting to Swagger UI
   app.get('/auth/google/callback',
     passport.authenticate('google', {
-      successRedirect: '/api-docs',
       failureRedirect: '/auth/failure'
-    })
+    }),
+    (req, res) => {
+      // Successful authentication - return JSON response
+      res.json({
+        success: true,
+        message: 'Successfully authenticated with Google',
+        user: {
+          id: req.user.id,
+          displayName: req.user.displayName,
+          email: req.user.emails[0].value
+        },
+        authenticated: true,
+        endpoints: {
+          'API Documentation': '/api-docs',
+          'Check Auth Status': '/auth/check',
+          'Logout': '/auth/logout',
+          'Protected Routes': [
+            'POST /api/books',
+            'PUT /api/books/:id',
+            'DELETE /api/books/:id',
+            'POST /api/authors',
+            'PUT /api/authors/:id',
+            'DELETE /api/authors/:id'
+          ]
+        },
+        note: 'You can now access protected routes. Visit /api-docs for API documentation.'
+      });
+    }
   );
   
   console.log('✅ OAuth authentication routes enabled');
