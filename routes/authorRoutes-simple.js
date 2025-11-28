@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Author = require('../models/Author');
-const requireAuth = require('../middleware/auth'); // Direct import
+const requireAuth = require('../middleware/auth');
 
 /**
  * @swagger

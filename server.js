@@ -373,13 +373,72 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   customCss: '.swagger-ui .topbar { display: none }'
 }));
 
-// Import routes
+// ===== DEBUG ROUTE IMPORTS =====
+console.log('🔧 Debugging route imports...');
+
+// Test each import individually
+try {
+  console.log('1. Testing bookController...');
+  const bookController = require('./controllers/bookController');
+  console.log('✅ bookController loaded:', typeof bookController);
+  console.log('   - getAllBooks:', typeof bookController.getAllBooks);
+  console.log('   - createBook:', typeof bookController.createBook);
+} catch (error) {
+  console.error('❌ bookController error:', error.message);
+}
+
+try {
+  console.log('2. Testing validation middleware...');
+  const validation = require('./middleware/validation');
+  console.log('✅ validation loaded:', typeof validation);
+  console.log('   - validateBook:', typeof validation.validateBook);
+  console.log('   - validateObjectId:', typeof validation.validateObjectId);
+} catch (error) {
+  console.error('❌ validation error:', error.message);
+}
+
+try {
+  console.log('3. Testing auth middleware...');
+  const auth = require('./middleware/auth');
+  console.log('✅ auth loaded:', typeof auth);
+} catch (error) {
+  console.error('❌ auth error:', error.message);
+}
+
+try {
+  console.log('4. Testing book model...');
+  const bookModel = require('./models/book');
+  console.log('✅ book model loaded');
+} catch (error) {
+  console.error('❌ book model error:', error.message);
+}
+
+try {
+  console.log('5. Testing bookRoutes...');
+  const bookRoutes = require('./routes/bookRoutes');
+  console.log('✅ bookRoutes loaded, type:', typeof bookRoutes);
+} catch (error) {
+  console.error('❌ bookRoutes error:', error.message);
+}
+
+try {
+  console.log('6. Testing authorRoutesSimple...');
+  const authorRoutesSimple = require('./routes/authorRoutes-simple');
+  console.log('✅ authorRoutesSimple loaded, type:', typeof authorRoutesSimple);
+} catch (error) {
+  console.error('❌ authorRoutesSimple error:', error.message);
+}
+
+// Now import them properly for use
+console.log('7. Final imports for use...');
 const bookRoutes = require('./routes/bookRoutes');
 const authorRoutesSimple = require('./routes/authorRoutes-simple');
 
 // Routes
+console.log('8. Setting up routes...');
 app.use('/api/books', bookRoutes);
 app.use('/api/authors', authorRoutesSimple);
+console.log('✅ All routes set up successfully');
 
 // 404 handler
 app.use((req, res) => {
