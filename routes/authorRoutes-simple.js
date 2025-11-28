@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const Author = require('../models/Author');
+const requireAuth = require('../middleware/auth'); // Direct import
 
 /**
  * @swagger
@@ -9,27 +11,25 @@ const router = express.Router();
  *       type: object
  *       required:
  *         - name
- *         - birthYear
+ *         - birthDate
  *         - nationality
  *       properties:
  *         name:
  *           type: string
  *           example: J.K. Rowling
- *         bio:
+ *         birthDate:
  *           type: string
- *           example: British author best known for the Harry Potter series
- *         birthYear:
- *           type: integer
- *           example: 1965
+ *           format: date
+ *           example: "1965-07-31"
  *         nationality:
  *           type: string
  *           example: British
+ *         biography:
+ *           type: string
+ *           example: Joanne Rowling, better known by her pen name J.K. Rowling, is a British author and philanthropist.
  *         website:
  *           type: string
- *           example: https://www.jkrowling.com
- *         isActive:
- *           type: boolean
- *           example: true
+ *           example: "https://www.jkrowling.com"
  */
 
 /**
@@ -55,20 +55,25 @@ const router = express.Router();
  *                     $ref: '#/components/schemas/Author'
  *                 count:
  *                   type: integer
- *                   example: 5
+ *                   example: 10
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
-router.get('/', (req, res) => {
-    res.json({ 
-        success: true, 
-        message: 'Get all authors - working!',
-        data: []
-    });
+router.get('/', async (req, res) => {
+    try {
+        const authors = await Author.find().sort({ name: 1 });
+        res.json({
+            success: true,
+            data: authors,
+            count: authors.length
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching authors',
+            error: error.message
+        });
+    }
 });
 
 /**
@@ -84,7 +89,6 @@ router.get('/', (req, res) => {
  *         schema:
  *           type: string
  *         description: MongoDB ObjectId of the author
- *         example: "651a1b2c3d4e5f6789012345"
  *     responses:
  *       200:
  *         description: Successfully retrieved the author
@@ -100,29 +104,37 @@ router.get('/', (req, res) => {
  *                   $ref: '#/components/schemas/Author'
  *       400:
  *         description: Invalid ID format
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  *       404:
  *         description: Author not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
-router.get('/:id', (req, res) => {
-    res.json({ 
-        success: true, 
-        message: `Get author by ID: ${req.params.id}`,
-        data: null
-    });
+router.get('/:id', async (req, res) => {
+    try {
+        const author = await Author.findById(req.params.id);
+        if (!author) {
+            return res.status(404).json({
+                success: false,
+                message: 'Author not found'
+            });
+        }
+        res.json({
+            success: true,
+            data: author
+        });
+    } catch (error) {
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid author ID format'
+            });
+        }
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching author',
+            error: error.message
+        });
+    }
 });
 
 /**
@@ -155,41 +167,37 @@ router.get('/:id', (req, res) => {
  *                   example: Author created successfully
  *                 data:
  *                   $ref: '#/components/schemas/Author'
- *                 user:
- *                   type: string
- *                   example: Henry Osuagwu
  *       401:
- *         description: Unauthorized - Please log in
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         description: Authentication required
  *       400:
- *         description: Validation error - missing or invalid data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         description: Validation error
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
-router.post('/', (req, res) => {
-    if (!req.isAuthenticated()) {
-        return res.status(401).json({ 
+router.post('/', requireAuth, async (req, res) => {
+    try {
+        const author = new Author(req.body);
+        await author.save();
+        res.status(201).json({
+            success: true,
+            message: 'Author created successfully',
+            data: author
+        });
+    } catch (error) {
+        if (error.name === 'ValidationError') {
+            const errors = Object.values(error.errors).map(err => err.message);
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors
+            });
+        }
+        res.status(500).json({
             success: false,
-            message: 'Please log in to create authors'
+            message: 'Error creating author',
+            error: error.message
         });
     }
-    res.json({ 
-        success: true, 
-        message: 'Author created successfully by authenticated user!',
-        data: req.body,
-        user: req.user.displayName
-    });
 });
 
 /**
@@ -207,7 +215,6 @@ router.post('/', (req, res) => {
  *         schema:
  *           type: string
  *         description: MongoDB ObjectId of the author to update
- *         example: "651a1b2c3d4e5f6789012345"
  *     requestBody:
  *       required: true
  *       content:
@@ -217,60 +224,56 @@ router.post('/', (req, res) => {
  *     responses:
  *       200:
  *         description: Author updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: Author updated successfully
- *                 data:
- *                   $ref: '#/components/schemas/Author'
- *                 user:
- *                   type: string
- *                   example: Henry Osuagwu
  *       401:
- *         description: Unauthorized - Please log in
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         description: Authentication required
  *       400:
- *         description: Validation error or invalid ID format
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         description: Validation error
  *       404:
  *         description: Author not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
-router.put('/:id', (req, res) => {
-    if (!req.isAuthenticated()) {
-        return res.status(401).json({ 
+router.put('/:id', requireAuth, async (req, res) => {
+    try {
+        const author = await Author.findByIdAndUpdate(
+            req.params.id,
+            req.body,
+            { new: true, runValidators: true }
+        );
+        
+        if (!author) {
+            return res.status(404).json({
+                success: false,
+                message: 'Author not found'
+            });
+        }
+        
+        res.json({
+            success: true,
+            message: 'Author updated successfully',
+            data: author
+        });
+    } catch (error) {
+        if (error.name === 'ValidationError') {
+            const errors = Object.values(error.errors).map(err => err.message);
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors
+            });
+        }
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid author ID format'
+            });
+        }
+        res.status(500).json({
             success: false,
-            message: 'Please log in to update authors'
+            message: 'Error updating author',
+            error: error.message
         });
     }
-    res.json({ 
-        success: true, 
-        message: `Author ${req.params.id} updated successfully!`,
-        data: req.body,
-        user: req.user.displayName
-    });
 });
 
 /**
@@ -288,61 +291,47 @@ router.put('/:id', (req, res) => {
  *         schema:
  *           type: string
  *         description: MongoDB ObjectId of the author to delete
- *         example: "651a1b2c3d4e5f6789012345"
  *     responses:
  *       200:
  *         description: Author deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: Author deleted successfully
- *                 user:
- *                   type: string
- *                   example: Henry Osuagwu
  *       401:
- *         description: Unauthorized - Please log in
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         description: Authentication required
  *       400:
  *         description: Invalid ID format
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  *       404:
  *         description: Author not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
-router.delete('/:id', (req, res) => {
-    if (!req.isAuthenticated()) {
-        return res.status(401).json({ 
+router.delete('/:id', requireAuth, async (req, res) => {
+    try {
+        const author = await Author.findByIdAndDelete(req.params.id);
+        
+        if (!author) {
+            return res.status(404).json({
+                success: false,
+                message: 'Author not found'
+            });
+        }
+        
+        res.json({
+            success: true,
+            message: 'Author deleted successfully',
+            data: author
+        });
+    } catch (error) {
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid author ID format'
+            });
+        }
+        res.status(500).json({
             success: false,
-            message: 'Please log in to delete authors'
+            message: 'Error deleting author',
+            error: error.message
         });
     }
-    res.json({ 
-        success: true, 
-        message: `Author ${req.params.id} deleted successfully!`,
-        user: req.user.displayName
-    });
 });
 
 module.exports = router;

@@ -9,10 +9,8 @@ const {
 } = require('../controllers/bookController');
 const { validateBook, validateObjectId } = require('../middleware/validation');
 
-// Lazy load authentication middleware to avoid circular dependencies
-const getAuthMiddleware = () => {
-    return require('../middleware/auth');
-};
+// Import auth middleware directly (remove lazy loading)
+const requireAuth = require('../middleware/auth');
 
 /**
  * @swagger
@@ -162,6 +160,8 @@ router.get('/:id', validateObjectId, getBookById);
  *   post:
  *     summary: Create a new book
  *     tags: [Books]
+ *     security:
+ *       - oauth2: []
  *     requestBody:
  *       required: true
  *       content:
@@ -184,6 +184,12 @@ router.get('/:id', validateObjectId, getBookById);
  *                   example: Book created successfully
  *                 data:
  *                   $ref: '#/components/schemas/Book'
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       400:
  *         description: Validation error - missing or invalid data
  *         content:
@@ -197,7 +203,7 @@ router.get('/:id', validateObjectId, getBookById);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/', (req, res, next) => getAuthMiddleware()(req, res, next), validateBook, createBook); // PROTECTED
+router.post('/', requireAuth, validateBook, createBook); // PROTECTED
 
 /**
  * @swagger
@@ -205,6 +211,8 @@ router.post('/', (req, res, next) => getAuthMiddleware()(req, res, next), valida
  *   put:
  *     summary: Update a book by ID
  *     tags: [Books]
+ *     security:
+ *       - oauth2: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -235,6 +243,12 @@ router.post('/', (req, res, next) => getAuthMiddleware()(req, res, next), valida
  *                   example: Book updated successfully
  *                 data:
  *                   $ref: '#/components/schemas/Book'
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       400:
  *         description: Validation error or invalid ID format
  *         content:
@@ -254,7 +268,7 @@ router.post('/', (req, res, next) => getAuthMiddleware()(req, res, next), valida
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.put('/:id', (req, res, next) => getAuthMiddleware()(req, res, next), validateObjectId, validateBook, updateBook); // PROTECTED
+router.put('/:id', requireAuth, validateObjectId, validateBook, updateBook); // PROTECTED
 
 /**
  * @swagger
@@ -262,6 +276,8 @@ router.put('/:id', (req, res, next) => getAuthMiddleware()(req, res, next), vali
  *   delete:
  *     summary: Delete a book by ID
  *     tags: [Books]
+ *     security:
+ *       - oauth2: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -286,6 +302,12 @@ router.put('/:id', (req, res, next) => getAuthMiddleware()(req, res, next), vali
  *                   example: Book deleted successfully
  *                 data:
  *                   $ref: '#/components/schemas/Book'
+ *       401:
+ *         description: Authentication required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  *       400:
  *         description: Invalid ID format
  *         content:
@@ -305,6 +327,6 @@ router.put('/:id', (req, res, next) => getAuthMiddleware()(req, res, next), vali
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.delete('/:id', (req, res, next) => getAuthMiddleware()(req, res, next), validateObjectId, deleteBook); // PROTECTED
+router.delete('/:id', requireAuth, validateObjectId, deleteBook); // PROTECTED
 
 module.exports = router;
