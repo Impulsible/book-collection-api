@@ -5,7 +5,7 @@ const session = require('express-session');
 const passport = require('passport');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
-const MongoStore = require('connect-mongo'); // ADD THIS
+const MongoStore = require('connect-mongo'); // ADD THIS LINE
 require('dotenv').config();
 
 const app = express();
@@ -62,11 +62,13 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
+// REMOVED the problematic line: app.options('*', cors());
+
 app.use(express.json());
 app.use(express.static('public'));
 
 // ===== UPDATED SESSION CONFIGURATION =====
-// Session configuration with MongoDB Store (FIXED)
+// Session configuration with MongoDB Store (FIXED SESSION PERSISTENCE)
 app.use(session({
     secret: SESSION_SECRET,
     resave: false,
@@ -74,9 +76,9 @@ app.use(session({
     cookie: {
         secure: NODE_ENV === 'production',
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: NODE_ENV === 'production' ? 'none' : 'lax'
+        sameSite: NODE_ENV === 'production' ? 'none' : 'lax' // ADDED for cross-site cookies
     },
-    store: MongoStore.create({
+    store: MongoStore.create({ // CHANGED FROM MemoryStore to MongoDB
         mongoUrl: MONGODB_URI,
         collectionName: 'sessions',
         ttl: 24 * 60 * 60 // 24 hours in seconds
@@ -107,18 +109,15 @@ if (isOAuthConfigured) {
     })
   );
 
-  // UPDATED: Enhanced Google callback with better debugging
+  // FIXED: Google callback returns JSON instead of redirecting to Swagger UI
   app.get('/auth/google/callback',
     passport.authenticate('google', {
       failureRedirect: '/auth/failure',
-      failureMessage: true
+      failureMessage: true // ADDED for better error handling
     }),
     (req, res) => {
-      console.log('✅ Successful authentication:');
-      console.log('  - User ID:', req.user.id);
-      console.log('  - Display Name:', req.user.displayName);
-      console.log('  - Session ID:', req.sessionID);
-      console.log('  - isAuthenticated:', req.isAuthenticated());
+      console.log('✅ Successful authentication for:', req.user.displayName); // ADDED logging
+      console.log('✅ Session ID:', req.sessionID); // ADDED logging
       
       // Successful authentication - return JSON response
       res.json({
@@ -129,7 +128,7 @@ if (isOAuthConfigured) {
           displayName: req.user.displayName,
           email: req.user.emails[0].value
         },
-        sessionId: req.sessionID,
+        sessionId: req.sessionID, // ADDED session ID for debugging
         authenticated: true,
         endpoints: {
           'API Documentation': '/api-docs',
@@ -144,7 +143,7 @@ if (isOAuthConfigured) {
             'DELETE /api/authors/:id'
           ]
         },
-        note: 'You can now access protected routes. Your session is stored in MongoDB.'
+        note: 'You can now access protected routes. Your session is stored in MongoDB.' // UPDATED note
       });
     }
   );
@@ -184,7 +183,7 @@ app.get('/auth/failure', (req, res) => {
 });
 
 app.get('/auth/logout', (req, res) => {
-  console.log('🔐 Logout - Session ID:', req.sessionID);
+  console.log('🔐 Logout - Session ID:', req.sessionID); // ADDED logging
   req.logout(function(err) {
     if (err) { 
       return res.status(500).json({ 
@@ -195,41 +194,34 @@ app.get('/auth/logout', (req, res) => {
     res.json({ 
       success: true, 
       message: 'Successfully logged out',
-      note: 'Session cleared from MongoDB'
+      note: 'Session cleared from MongoDB' // UPDATED note
     });
   });
 });
 
-// UPDATED: Enhanced auth check with detailed debugging
+// UPDATED: Enhanced auth check with debugging
 app.get('/auth/check', (req, res) => {
-  console.log('🔐 Auth Check Debug:');
-  console.log('  - Session ID:', req.sessionID);
-  console.log('  - isAuthenticated:', req.isAuthenticated());
-  console.log('  - User:', req.user);
-  console.log('  - Session keys:', req.session ? Object.keys(req.session) : 'No session');
+  console.log('🔐 Auth Check - Session ID:', req.sessionID); // ADDED logging
+  console.log('🔐 Auth Check - isAuthenticated:', req.isAuthenticated()); // ADDED logging
   
   if (req.isAuthenticated()) {
     res.json({ 
       success: true,
       authenticated: true,
-      user: {
-        id: req.user.id,
-        displayName: req.user.displayName,
-        email: req.user.emails?.[0]?.value
-      },
-      sessionId: req.sessionID,
+      user: req.user,
+      sessionId: req.sessionID, // ADDED session ID
       oauthConfigured: isOAuthConfigured,
-      sessionStore: 'MongoDB'
+      sessionStore: 'MongoDB' // UPDATED
     });
   } else {
     res.json({ 
       success: true,
       authenticated: false,
       user: null,
-      sessionId: req.sessionID,
+      sessionId: req.sessionID, // ADDED session ID
       oauthConfigured: isOAuthConfigured,
-      sessionStore: 'MongoDB',
-      note: 'Please log in to access protected routes'
+      sessionStore: 'MongoDB', // UPDATED
+      note: !isOAuthConfigured ? 'OAuth not configured in production environment' : 'Please log in to access protected routes'
     });
   }
 });
@@ -273,7 +265,7 @@ app.get('/', (req, res) => {
     response.notes = [
       'OAuth authentication is enabled and functional',
       'Protected routes require Google login',
-      'Sessions are stored in MongoDB (persistent)'
+      'Sessions are stored in MongoDB (persistent)' // UPDATED note
     ];
   } else {
     response.authentication = {
@@ -294,7 +286,7 @@ app.get('/', (req, res) => {
     ];
     response.notes = [
       'To enable OAuth: Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Render environment variables',
-      'Using MongoDB for sessions (persistent storage)'
+      'Using MongoDB for sessions (persistent storage)' // UPDATED note
     ];
   }
 
@@ -342,7 +334,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: 'https://book-collection-api-0vgp.onrender.com',
+        url: 'https://book-collection-api-0vgp.onrender.com', // Production first
         description: 'Production server',
       },
       {
@@ -378,8 +370,8 @@ const swaggerOptions = {
           type: 'oauth2',
           flows: {
             authorizationCode: {
-              authorizationUrl: 'https://book-collection-api-0vgp.onrender.com/auth/google',
-              tokenUrl: 'https://book-collection-api-0vgp.onrender.com/auth/google/callback',
+              authorizationUrl: 'https://book-collection-api-0vgp.onrender.com/auth/google', // Full HTTPS URL
+              tokenUrl: 'https://book-collection-api-0vgp.onrender.com/auth/google/callback', // Full HTTPS URL
               scopes: {}
             }
           }
