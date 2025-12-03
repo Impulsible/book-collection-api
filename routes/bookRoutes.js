@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+
+// Import book controller functions
 const {
     getAllBooks,
     getBookById, 
@@ -7,31 +9,10 @@ const {
     updateBook,
     deleteBook
 } = require('../controllers/bookController');
+
+// Import middleware
 const { validateBook, validateObjectId } = require('../middleware/validation');
 const isAuthenticated = require('../middleware/auth');
-
-console.log('🔄 Book routes loaded - using centralized auth middleware');
-
-// ===== DEBUG ROUTES =====
-router.get('/test', (req, res) => {
-    console.log('✅ /api/books/test route hit');
-    res.json({ 
-        success: true, 
-        message: 'Books API test route is working!',
-        timestamp: new Date().toISOString()
-    });
-});
-
-router.get('/public-test', (req, res) => {
-    res.json({
-        success: true,
-        message: 'Public books route - no authentication required',
-        authenticated: req.isAuthenticated(),
-        user: req.user || null
-    });
-});
-
-// ===== PUBLIC ROUTES =====
 
 /**
  * @swagger
@@ -41,7 +22,7 @@ router.get('/public-test', (req, res) => {
  *     tags: [Books]
  *     responses:
  *       200:
- *         description: Successfully retrieved all books
+ *         description: List of all books
  */
 router.get('/', getAllBooks);
 
@@ -49,7 +30,7 @@ router.get('/', getAllBooks);
  * @swagger
  * /api/books/{id}:
  *   get:
- *     summary: Get a specific book by ID
+ *     summary: Get a book by ID
  *     tags: [Books]
  *     parameters:
  *       - in: path
@@ -59,21 +40,17 @@ router.get('/', getAllBooks);
  *           type: string
  *     responses:
  *       200:
- *         description: Successfully retrieved the book
- *       400:
- *         description: Invalid ID format
+ *         description: Book details
  *       404:
  *         description: Book not found
  */
 router.get('/:id', validateObjectId, getBookById);
 
-// ===== PROTECTED ROUTES =====
-
 /**
  * @swagger
  * /api/books:
  *   post:
- *     summary: Create a new book (Protected)
+ *     summary: Add a new book
  *     tags: [Books]
  *     security:
  *       - sessionAuth: []
@@ -85,9 +62,9 @@ router.get('/:id', validateObjectId, getBookById);
  *             type: object
  *     responses:
  *       201:
- *         description: Book created successfully
+ *         description: Book created
  *       401:
- *         description: Authentication required
+ *         description: Not logged in
  */
 router.post('/', isAuthenticated, validateBook, createBook);
 
@@ -95,7 +72,7 @@ router.post('/', isAuthenticated, validateBook, createBook);
  * @swagger
  * /api/books/{id}:
  *   put:
- *     summary: Update a book by ID (Protected)
+ *     summary: Update a book
  *     tags: [Books]
  *     security:
  *       - sessionAuth: []
@@ -113,9 +90,9 @@ router.post('/', isAuthenticated, validateBook, createBook);
  *             type: object
  *     responses:
  *       200:
- *         description: Book updated successfully
+ *         description: Book updated
  *       401:
- *         description: Authentication required
+ *         description: Not logged in
  */
 router.put('/:id', isAuthenticated, validateObjectId, validateBook, updateBook);
 
@@ -123,7 +100,7 @@ router.put('/:id', isAuthenticated, validateObjectId, validateBook, updateBook);
  * @swagger
  * /api/books/{id}:
  *   delete:
- *     summary: Delete a book by ID (Protected)
+ *     summary: Delete a book
  *     tags: [Books]
  *     security:
  *       - sessionAuth: []
@@ -135,12 +112,10 @@ router.put('/:id', isAuthenticated, validateObjectId, validateBook, updateBook);
  *           type: string
  *     responses:
  *       200:
- *         description: Book deleted successfully
+ *         description: Book deleted
  *       401:
- *         description: Authentication required
+ *         description: Not logged in
  */
 router.delete('/:id', isAuthenticated, validateObjectId, deleteBook);
-
-console.log('✅ All book routes configured successfully');
 
 module.exports = router;

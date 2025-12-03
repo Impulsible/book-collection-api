@@ -29,7 +29,4 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// ===== FIXED: Remove password field if it exists =====
-// Since we're using OAuth, we don't need passwords
-
 module.exports = mongoose.model('User', userSchema);

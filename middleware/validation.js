@@ -1,144 +1,94 @@
 // middleware/validation.js
 const mongoose = require('mongoose');
 
+// Check if book data is valid before saving
 const validateBook = (req, res, next) => {
-    console.log('📖 Validating book data:', req.body);
-    
-    const { title, author, isbn, publicationYear, genre, publisher, pageCount } = req.body;
+    const { title, author, isbn, publicationYear, genre } = req.body;
     const errors = [];
 
-    // Required fields validation
-    if (!title) errors.push('Title is required');
-    if (!author) errors.push('Author is required');
+    // Make sure we have all the required fields
+    if (!title) errors.push('Book title is required');
+    if (!author) errors.push('Author name is required');
     if (!isbn) errors.push('ISBN is required');
     if (!publicationYear) errors.push('Publication year is required');
     if (!genre) errors.push('Genre is required');
 
-    // Data type validation
-    if (publicationYear && !Number.isInteger(publicationYear)) {
-        errors.push('Publication year must be a number');
-    }
-    
-    if (publicationYear && (publicationYear < 1000 || publicationYear > new Date().getFullYear() + 5)) {
-        errors.push('Publication year must be reasonable (1000 - current year + 5)');
-    }
-
-    if (pageCount && !Number.isInteger(pageCount)) {
-        errors.push('Page count must be a number');
-    }
-    
-    if (pageCount && pageCount <= 0) {
-        errors.push('Page count must be positive');
+    // Check publication year is a reasonable number
+    if (publicationYear) {
+        const currentYear = new Date().getFullYear();
+        if (publicationYear < 1000 || publicationYear > currentYear + 5) {
+            errors.push(`Publication year should be between 1000 and ${currentYear + 5}`);
+        }
     }
 
-    // ISBN format validation (basic)
-    if (isbn && typeof isbn !== 'string') {
-        errors.push('ISBN must be a string');
+    // Check page count if provided
+    if (req.body.pageCount && req.body.pageCount <= 0) {
+        errors.push('Page count must be at least 1');
     }
 
-    if (isbn && isbn.length < 10) {
-        errors.push('ISBN appears to be invalid (too short)');
-    }
-
+    // If we found any errors, stop here
     if (errors.length > 0) {
-        console.log('❌ Book validation errors:', errors);
         return res.status(400).json({
             success: false,
-            message: 'Validation failed',
-            errors: errors,
-            requiredFields: ['title', 'author', 'isbn', 'publicationYear', 'genre'],
-            optionalFields: ['publisher', 'pageCount', 'description', 'coverImage']
+            message: 'Book data is not valid',
+            errors: errors
         });
     }
 
-    console.log('✅ Book validation passed');
+    // Everything looks good, continue
     next();
 };
 
+// Check if author data is valid
 const validateAuthor = (req, res, next) => {
-    console.log('📝 Validating author data:', req.body);
-    
-    const { name, bio, birthDate, nationality } = req.body;
+    const { name, nationality } = req.body;
     const errors = [];
 
     // Required fields
     if (!name) errors.push('Author name is required');
     if (!nationality) errors.push('Nationality is required');
 
-    // Data type validation
-    if (name && typeof name !== 'string') {
-        errors.push('Name must be a string');
+    // Check bio length if provided
+    if (req.body.bio && req.body.bio.length > 2000) {
+        errors.push('Bio is too long (max 2000 characters)');
     }
 
-    if (bio && typeof bio !== 'string') {
-        errors.push('Bio must be a string');
-    }
-
-    if (birthDate) {
-        const date = new Date(birthDate);
-        if (isNaN(date.getTime())) {
+    // Check birth date if provided
+    if (req.body.birthDate) {
+        const birthDate = new Date(req.body.birthDate);
+        if (isNaN(birthDate.getTime())) {
             errors.push('Birth date must be a valid date');
         }
     }
 
     if (errors.length > 0) {
-        console.log('❌ Author validation errors:', errors);
         return res.status(400).json({
             success: false,
-            message: 'Validation failed',
+            message: 'Author data is not valid',
             errors: errors
         });
     }
 
-    console.log('✅ Author validation passed');
     next();
 };
 
+// Check if a MongoDB ID looks valid
 const validateObjectId = (req, res, next) => {
-    console.log('🔍 Validating ObjectId:', req.params.id);
+    const id = req.params.id;
     
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
         return res.status(400).json({
             success: false,
-            message: "Invalid ID format",
-            providedId: req.params.id
+            message: 'Invalid ID format'
         });
     }
+    
     next();
 };
 
-// Optional: More specific validation for different scenarios
-const validateBookUpdate = (req, res, next) => {
-    console.log('📖 Validating book update data:', req.body);
-    
-    const { publicationYear, pageCount } = req.body;
-    const errors = [];
-
-    // Only validate fields that are actually being updated
-    if (publicationYear && !Number.isInteger(publicationYear)) {
-        errors.push('Publication year must be a number');
-    }
-    
-    if (pageCount && !Number.isInteger(pageCount)) {
-        errors.push('Page count must be a number');
-    }
-
-    if (errors.length > 0) {
-        console.log('❌ Book update validation errors:', errors);
-        return res.status(400).json({
-            success: false,
-            message: 'Validation failed',
-            errors: errors
-        });
-    }
-
-    console.log('✅ Book update validation passed');
-    next();
-};
-
+// Export all validation functions
 module.exports = {
     validateBook,
     validateAuthor,
-    validateObjectId,
-    validateBookUpdate
+    validateObjectId
 };

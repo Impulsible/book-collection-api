@@ -1,239 +1,177 @@
-const Book = require('../models/book'); // FIXED: lowercase 'book'
+const Book = require('../models/book');
 
-// GET all books
+// Get all books from our database
 const getAllBooks = async (req, res) => {
     try {
-        console.log('📚 Get All Books - Public route accessed');
+        // Find all books and sort them by title
         const books = await Book.find().sort({ title: 1 });
         
         res.json({
             success: true,
-            data: books,
+            books: books,
             count: books.length
         });
+        
     } catch (error) {
-        console.error('❌ Error retrieving books:', error);
+        console.log('Error getting books:', error.message);
         res.status(500).json({
             success: false,
-            message: 'Error retrieving books',
+            message: 'Could not get books list',
             error: error.message
         });
     }
 };
 
-// GET single book by ID
+// Get one specific book by its ID
 const getBookById = async (req, res) => {
     try {
-        console.log('📚 Get Book By ID - Public route accessed, ID:', req.params.id);
         const book = await Book.findById(req.params.id);
         
         if (!book) {
-            console.log('❌ Book not found:', req.params.id);
             return res.status(404).json({
                 success: false,
-                message: 'Book not found'
+                message: 'Could not find a book with that ID'
             });
         }
 
-        console.log('✅ Book found:', book.title);
         res.json({
             success: true,
-            data: book
+            book: book
         });
+        
     } catch (error) {
-        console.error('❌ Error retrieving book:', error);
+        console.log('Error getting book:', error.message);
+        
+        // Check if it's an invalid ID format
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'That book ID format is not valid'
+            });
+        }
+        
         res.status(500).json({
             success: false,
-            message: 'Error retrieving book',
+            message: 'Error looking up book',
             error: error.message
         });
     }
 };
 
-// POST create new book
+// Create a new book (requires login)
 const createBook = async (req, res) => {
     try {
-        console.log('📖 Create Book Controller:');
-        console.log('  - Authenticated User:', req.user ? {
-            id: req.user.id,
-            displayName: req.user.displayName,
-            email: req.user.emails?.[0]?.value
-        } : 'No user');
-        console.log('  - Request Body:', req.body);
-        
-        // Additional authentication check (should already be handled by middleware)
+        // Make sure user is logged in
         if (!req.user) {
-            console.log('❌ No user in request - authentication issue');
             return res.status(401).json({
                 success: false,
-                message: 'Authentication required - no user session',
-                loginUrl: '/auth/google'
+                message: 'Please log in to add books'
             });
         }
 
-        const book = new Book(req.body);
-        const savedBook = await book.save();
+        const newBook = new Book(req.body);
+        const savedBook = await newBook.save();
 
-        console.log('✅ Book created successfully by:', req.user.displayName);
         res.status(201).json({
             success: true,
-            message: 'Book created successfully',
-            data: savedBook,
-            createdBy: {
-                userId: req.user.id,
-                displayName: req.user.displayName,
-                email: req.user.emails?.[0]?.value
+            message: 'Book added to collection',
+            book: savedBook,
+            addedBy: {
+                name: req.user.displayName,
+                userId: req.user.id
             }
         });
-    } catch (error) {
-        console.error('❌ Error creating book:', error);
         
+    } catch (error) {
+        console.log('Error creating book:', error.message);
+        
+        // Check for duplicate ISBN
         if (error.code === 11000) {
             return res.status(400).json({
                 success: false,
-                message: 'ISBN already exists',
-                error: 'Duplicate ISBN detected'
+                message: 'A book with this ISBN already exists',
+                error: 'Duplicate ISBN'
             });
         }
         
+        // Check for validation errors
         if (error.name === 'ValidationError') {
             const errors = Object.values(error.errors).map(err => err.message);
-            console.log('❌ Validation errors:', errors);
             return res.status(400).json({
                 success: false,
-                message: 'Validation failed',
+                message: 'Book data is not valid',
                 errors: errors
             });
         }
         
-        res.status(400).json({
+        res.status(500).json({
             success: false,
-            message: 'Error creating book',
+            message: 'Could not create book',
             error: error.message
         });
     }
 };
 
-// PUT update book by ID
+// Update an existing book (requires login)
 const updateBook = async (req, res) => {
     try {
-        console.log('📖 Update Book Controller:');
-        console.log('  - Authenticated User:', req.user ? req.user.displayName : 'No user');
-        console.log('  - Book ID:', req.params.id);
-        console.log('  - Update Data:', req.body);
-
-        // Additional authentication check
+        // Make sure user is logged in
         if (!req.user) {
-            console.log('❌ No user in request - authentication issue');
             return res.status(401).json({
                 success: false,
-                message: 'Authentication required',
-                loginUrl: '/auth/google'
+                message: 'Please log in to update books'
             });
         }
 
         const book = await Book.findByIdAndUpdate(
             req.params.id,
             req.body,
-            { new: true, runValidators: true }
+            { 
+                new: true, // Return the updated book
+                runValidators: true // Check that the update is valid
+            }
         );
 
         if (!book) {
-            console.log('❌ Book not found for update:', req.params.id);
             return res.status(404).json({
                 success: false,
-                message: 'Book not found'
+                message: 'Book not found - cannot update'
             });
         }
 
-        console.log('✅ Book updated successfully by:', req.user.displayName);
         res.json({
             success: true,
-            message: 'Book updated successfully',
-            data: book,
+            message: 'Book updated',
+            book: book,
             updatedBy: {
-                userId: req.user.id,
-                displayName: req.user.displayName,
-                email: req.user.emails?.[0]?.value
+                name: req.user.displayName,
+                userId: req.user.id
             }
         });
-    } catch (error) {
-        console.error('❌ Error updating book:', error);
         
+    } catch (error) {
+        console.log('Error updating book:', error.message);
+        
+        // Check for duplicate ISBN
         if (error.code === 11000) {
             return res.status(400).json({
                 success: false,
-                message: 'ISBN already exists',
-                error: 'Duplicate ISBN detected'
+                message: 'A book with this ISBN already exists',
+                error: 'Duplicate ISBN'
             });
         }
         
+        // Check for validation errors
         if (error.name === 'ValidationError') {
             const errors = Object.values(error.errors).map(err => err.message);
-            console.log('❌ Validation errors:', errors);
             return res.status(400).json({
                 success: false,
-                message: 'Validation failed',
+                message: 'Update data is not valid',
                 errors: errors
             });
         }
         
-        if (error.name === 'CastError') {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid book ID format'
-            });
-        }
-        
-        res.status(400).json({
-            success: false,
-            message: 'Error updating book',
-            error: error.message
-        });
-    }
-};
-
-// DELETE book by ID
-const deleteBook = async (req, res) => {
-    try {
-        console.log('📖 Delete Book Controller:');
-        console.log('  - Authenticated User:', req.user ? req.user.displayName : 'No user');
-        console.log('  - Book ID to delete:', req.params.id);
-
-        // Additional authentication check
-        if (!req.user) {
-            console.log('❌ No user in request - authentication issue');
-            return res.status(401).json({
-                success: false,
-                message: 'Authentication required',
-                loginUrl: '/auth/google'
-            });
-        }
-
-        const book = await Book.findByIdAndDelete(req.params.id);
-
-        if (!book) {
-            console.log('❌ Book not found for deletion:', req.params.id);
-            return res.status(404).json({
-                success: false,
-                message: 'Book not found'
-            });
-        }
-
-        console.log('✅ Book deleted successfully by:', req.user.displayName);
-        res.json({
-            success: true,
-            message: 'Book deleted successfully',
-            data: book,
-            deletedBy: {
-                userId: req.user.id,
-                displayName: req.user.displayName,
-                email: req.user.emails?.[0]?.value
-            }
-        });
-    } catch (error) {
-        console.error('❌ Error deleting book:', error);
-        
+        // Check for invalid ID format
         if (error.name === 'CastError') {
             return res.status(400).json({
                 success: false,
@@ -243,12 +181,62 @@ const deleteBook = async (req, res) => {
         
         res.status(500).json({
             success: false,
-            message: 'Error deleting book',
+            message: 'Could not update book',
             error: error.message
         });
     }
 };
 
+// Delete a book (requires login)
+const deleteBook = async (req, res) => {
+    try {
+        // Make sure user is logged in
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Please log in to remove books'
+            });
+        }
+
+        const book = await Book.findByIdAndDelete(req.params.id);
+
+        if (!book) {
+            return res.status(404).json({
+                success: false,
+                message: 'Book not found - cannot delete'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Book removed from collection',
+            book: book,
+            removedBy: {
+                name: req.user.displayName,
+                userId: req.user.id
+            }
+        });
+        
+    } catch (error) {
+        console.log('Error deleting book:', error.message);
+        
+        // Check for invalid ID format
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid book ID format'
+            });
+        }
+        
+        res.status(500).json({
+            success: false,
+            message: 'Could not delete book',
+            error: error.message
+        });
+    }
+};
+
+// Export all our book functions
 module.exports = {
     getAllBooks,
     getBookById,
