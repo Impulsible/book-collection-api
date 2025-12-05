@@ -53,21 +53,25 @@ if (!mongodbUri) {
 const allowedOrigins = [
     'http://localhost:3000',
     'https://localhost:3000',
-    'http://localhost:5173',
+    'http://localhost:5173', // Vite dev server
     'https://book-collection-api-0vgp.onrender.com',
     serverBaseUrl
 ].filter(origin => origin);
 
 console.log('Allowed origins:', allowedOrigins);
 
+// Smart CORS configuration that works for both environments
 app.use(cors({
     origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps, curl, postman)
         if (!origin) return callback(null, true);
         
+        // Allow all localhost origins in development
         if (!isProduction && origin.includes('localhost')) {
             return callback(null, true);
         }
         
+        // Check if origin is in allowed list
         if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -75,7 +79,7 @@ app.use(cors({
             callback(new Error('Not allowed by CORS'));
         }
     },
-    credentials: true,
+    credentials: true, // REQUIRED for cookies
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'Set-Cookie', 'X-Requested-With'],
     exposedHeaders: ['Set-Cookie']
@@ -85,36 +89,38 @@ app.use(cors({
 // MIDDLEWARE SETUP
 // ====================
 
+// Cookie parser must come before session
 app.use(cookieParser());
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 // ====================
-// SESSION CONFIGURATION - FIXED FOR PERSISTENCE
+// SESSION CONFIGURATION
 // ====================
 
+// Dynamic session config for both environments
 const sessionConfig = {
     name: 'bookCollectionSession',
     secret: sessionSecret,
-    resave: true, // TRUE: Forces session to be saved back to session store
-    saveUninitialized: true, // TRUE: Save new but not modified sessions
+    resave: true,
+    saveUninitialized: true,
     store: MongoStore.create({
         mongoUrl: mongodbUri,
         collectionName: 'sessions',
-        ttl: 24 * 60 * 60, // 24 hours
-        autoRemove: 'native',
-        touchAfter: 24 * 3600
+        ttl: 24 * 60 * 60 // 24 hours
     }),
     cookie: {
         httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        // Dynamic settings based on environment
         secure: isProduction,
-        maxAge: 24 * 60 * 60 * 1000,
         sameSite: isProduction ? 'none' : 'lax'
     }
 };
 
-// Add domain only in production
+// Add domain only in production (Render)
 if (isProduction) {
     sessionConfig.cookie.domain = '.onrender.com';
 }
@@ -213,6 +219,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // TEST & DEBUG ROUTES
 // ====================
 
+// Test if basic API is working
 app.get('/', (req, res) => {
     res.json({
         message: 'Book Collection API',
@@ -220,18 +227,19 @@ app.get('/', (req, res) => {
         environment: nodeEnv,
         server: serverBaseUrl,
         authenticated: req.isAuthenticated(),
-        session_id: req.sessionID,
         endpoints: {
             books: '/api/books',
             authors: '/api/authors',
             docs: '/api-docs',
             health: '/health',
             auth: '/auth',
-            session_test: '/session-test'
+            test: '/test',
+            cookie_test: '/cookie-test'
         }
     });
 });
 
+// Health check
 app.get('/health', (req, res) => {
     const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
     
@@ -246,31 +254,50 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Session persistence test
-app.get('/session-test', (req, res) => {
-    // Initialize session counter if not exists
-    if (!req.session.visitCount) {
-        req.session.visitCount = 0;
+// Simple test route
+app.get('/test', (req, res) => {
+    res.json({
+        success: true,
+        message: 'API is working',
+        environment: nodeEnv,
+        cookies_received: req.headers.cookie || 'No cookies',
+        session_id: req.sessionID
+    });
+});
+
+// Cookie test route for both environments
+app.get('/cookie-test', (req, res) => {
+    // Set a test cookie
+    const cookieOptions = {
+        httpOnly: false, // Allow JS access for testing
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
+        maxAge: 24 * 60 * 60 * 1000
+    };
+    
+    if (isProduction) {
+        cookieOptions.domain = '.onrender.com';
     }
     
-    req.session.visitCount++;
+    res.cookie('testCookie', `test-value-${Date.now()}`, cookieOptions);
     
     res.json({
         success: true,
-        message: 'Session test',
+        message: 'Test cookie set',
+        environment: nodeEnv,
+        is_production: isProduction,
+        cookie_options: cookieOptions,
+        cookies_received: req.headers.cookie || 'No cookies received',
         session_id: req.sessionID,
-        visit_count: req.session.visitCount,
-        session_data: req.session,
-        cookies: req.headers.cookie || 'No cookies',
-        authenticated: req.isAuthenticated(),
-        note: 'Refresh this page to see if visit_count increases (session is persistent)'
+        authenticated: req.isAuthenticated()
     });
 });
 
 // ====================
-// AUTH ROUTES - UPDATED FOR PERSISTENCE
+// AUTH ROUTES
 // ====================
 
+// List all auth endpoints
 app.get('/auth', (req, res) => {
     res.json({
         endpoints: {
@@ -286,6 +313,7 @@ app.get('/auth', (req, res) => {
     });
 });
 
+// Auth status
 app.get('/auth/status', (req, res) => {
     res.json({
         authenticated: req.isAuthenticated(),
@@ -299,6 +327,7 @@ app.get('/auth/status', (req, res) => {
     });
 });
 
+// Auth debug
 app.get('/auth/debug', (req, res) => {
     res.json({
         session_id: req.sessionID,
@@ -306,7 +335,13 @@ app.get('/auth/debug', (req, res) => {
         authenticated: req.isAuthenticated(),
         user: req.user,
         cookies: req.headers.cookie || 'No cookies',
-        environment: nodeEnv
+        headers: {
+            origin: req.headers.origin,
+            referer: req.headers.referer,
+            'user-agent': req.headers['user-agent']
+        },
+        environment: nodeEnv,
+        is_production: isProduction
     });
 });
 
@@ -318,71 +353,55 @@ if (hasGoogleAuth) {
     
     // Google login
     app.get('/auth/google',
-        (req, res, next) => {
-            console.log('Google login - Initial session ID:', req.sessionID);
-            // Save session before redirect
-            req.session.save((err) => {
-                if (err) console.log('Session save error:', err);
-                next();
-            });
-        },
         passport.authenticate('google', { 
             scope: ['email', 'profile'],
             prompt: 'select_account'
         })
     );
 
-    // Google callback - FIXED FOR PERSISTENCE
+    // Google callback - SIMPLE AND RELIABLE
     app.get('/auth/google/callback',
+        (req, res, next) => {
+            console.log('Google callback - Environment:', nodeEnv);
+            next();
+        },
         passport.authenticate('google', { 
             failureRedirect: '/auth/failure',
             failureMessage: true
         }),
         (req, res) => {
-            console.log('Google authentication successful for:', req.user.displayName);
+            console.log('Login successful for:', req.user.displayName);
             
-            // IMPORTANT: Manually save session with user info
-            req.session.user = {
-                id: req.user.id,
-                displayName: req.user.displayName,
-                email: req.user.emails[0].value
+            // Manually set session cookie to ensure it's set
+            const cookieOptions = {
+                secure: isProduction,
+                httpOnly: true,
+                maxAge: 24 * 60 * 60 * 1000,
+                sameSite: isProduction ? 'none' : 'lax'
             };
             
-            req.session.save((err) => {
-                if (err) {
-                    console.log('Session save error:', err);
-                    return res.status(500).json({ error: 'Session save failed' });
-                }
-                
-                console.log('Session saved successfully, ID:', req.sessionID);
-                
-                // Set cookie explicitly
-                const cookieOptions = {
-                    secure: isProduction,
-                    httpOnly: true,
-                    maxAge: 24 * 60 * 60 * 1000,
-                    sameSite: isProduction ? 'none' : 'lax'
-                };
-                
-                if (isProduction) {
-                    cookieOptions.domain = '.onrender.com';
-                }
-                
-                res.cookie('bookCollectionSession', req.sessionID, cookieOptions);
-                
-                res.json({
-                    success: true,
-                    message: 'Login successful!',
-                    user: {
-                        id: req.user.id,
-                        name: req.user.displayName,
-                        email: req.user.email
-                    },
-                    session_id: req.sessionID,
-                    cookie_set: true,
-                    note: 'Session is now persistent. Visit /auth/status to verify.',
-                    environment: nodeEnv
-                });
+            if (isProduction) {
+                cookieOptions.domain = '.onrender.com';
+            }
+            
+            // Set the session cookie
+            res.cookie('bookCollectionSession', req.sessionID, cookieOptions);
+            
+            res.json({
+                success: true,
+                message: 'Login successful!',
+                user: {
+                    id: req.user.id,
+                    name: req.user.displayName,
+                    email: req.user.email
+                },
+                session_id: req.sessionID,
+                cookie_set: true,
+                environment: nodeEnv,
+                next_steps: [
+                    'Visit /auth/status to verify login',
+                    'Use the session_id for API requests'
+                ]
             });
         }
     );
@@ -409,36 +428,28 @@ if (hasGoogleAuth) {
 
 // Logout
 app.get('/auth/logout', (req, res) => {
-    const user = req.user;
-    
     req.logout((err) => {
         if (err) {
             return res.status(500).json({ error: 'Logout failed' });
         }
         
-        // Destroy session
-        req.session.destroy((err) => {
-            if (err) {
-                console.log('Session destroy error:', err);
-            }
-            
-            // Clear cookies
-            const clearOptions = {
-                secure: isProduction,
-                sameSite: isProduction ? 'none' : 'lax'
-            };
-            
-            if (isProduction) {
-                clearOptions.domain = '.onrender.com';
-            }
-            
-            res.clearCookie('bookCollectionSession', clearOptions);
-            
-            res.json({
-                success: true,
-                message: `Goodbye ${user ? user.displayName : 'User'}! Logged out successfully.`,
-                environment: nodeEnv
-            });
+        // Clear cookies
+        const clearOptions = {
+            secure: isProduction,
+            sameSite: isProduction ? 'none' : 'lax'
+        };
+        
+        if (isProduction) {
+            clearOptions.domain = '.onrender.com';
+        }
+        
+        res.clearCookie('bookCollectionSession', clearOptions);
+        res.clearCookie('testCookie', clearOptions);
+        
+        res.json({
+            success: true,
+            message: 'Logged out successfully',
+            environment: nodeEnv
         });
     });
 });
@@ -471,21 +482,37 @@ app.use('/api/authors', authorRoutes);
 // ERROR HANDLING
 // ====================
 
+// Request logging
 app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
-    console.log('  Session ID:', req.sessionID);
-    console.log('  Authenticated:', req.isAuthenticated());
+    console.log('  Cookies:', req.headers.cookie || 'None');
+    console.log('  Origin:', req.headers.origin || 'None');
     next();
 });
 
+// 404 handler
 app.use((req, res) => {
     res.status(404).json({
         error: 'Route not found',
         path: req.originalUrl,
-        environment: nodeEnv
+        environment: nodeEnv,
+        available_routes: [
+            'GET /',
+            'GET /health',
+            'GET /test',
+            'GET /cookie-test',
+            'GET /api-docs',
+            'GET /auth',
+            'GET /auth/status',
+            'GET /auth/google',
+            'GET /auth/logout',
+            'GET /api/books',
+            'GET /api/authors'
+        ]
     });
 });
 
+// Error handler
 app.use((error, req, res, next) => {
     console.error('Server error:', error);
     
@@ -511,20 +538,20 @@ const startServer = async () => {
         console.log('\n📋 Test endpoints:');
         console.log(`  Home: ${serverBaseUrl}`);
         console.log(`  Health: ${serverBaseUrl}/health`);
-        console.log(`  Session test: ${serverBaseUrl}/session-test`);
+        console.log(`  Test: ${serverBaseUrl}/test`);
+        console.log(`  Cookie test: ${serverBaseUrl}/cookie-test`);
         console.log(`  Auth status: ${serverBaseUrl}/auth/status`);
         console.log(`  Google login: ${serverBaseUrl}/auth/google`);
         console.log(`  API docs: ${serverBaseUrl}/api-docs`);
         
         if (isProduction) {
-            console.log('\n🌐 Production (Render) mode');
-            console.log('   - Session persistence: ENABLED');
+            console.log('\n🌐 Production (Render) mode enabled');
             console.log('   - Cookies: secure=true, sameSite=none');
             console.log('   - Domain: .onrender.com');
         } else {
             console.log('\n💻 Development (localhost) mode');
-            console.log('   - Session persistence: ENABLED');
             console.log('   - Cookies: secure=false, sameSite=lax');
+            console.log('   - Domain: localhost');
         }
     });
 };
