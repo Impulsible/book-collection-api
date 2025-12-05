@@ -26,25 +26,19 @@ const isProduction = nodeEnv === 'production';
 // Figure out which URL to use
 let serverBaseUrl;
 
-// On Render, RENDER_EXTERNAL_URL is provided automatically
 if (process.env.RENDER_EXTERNAL_URL) {
-    // Running on Render
     serverBaseUrl = process.env.RENDER_EXTERNAL_URL;
-    console.log('Running on Render');
-} else if (process.env.RENDER_URL) {
-    // Using RENDER_URL from environment
-    serverBaseUrl = process.env.RENDER_URL;
-    console.log('Using RENDER_URL from environment');
+    console.log('Running on Render, URL:', serverBaseUrl);
 } else {
-    // Default to localhost for development
     serverBaseUrl = `http://localhost:${port}`;
-    console.log('Running locally');
+    console.log('Running locally, URL:', serverBaseUrl);
 }
 
 console.log('Starting Book Collection API');
 console.log('Environment:', nodeEnv);
 console.log('Port:', port);
 console.log('Server URL:', serverBaseUrl);
+console.log('Is production:', isProduction);
 
 // Check if we have MongoDB connection string
 if (!mongodbUri) {
@@ -81,6 +75,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
+// Set up sessions
 app.use(session({
     name: 'bookCollectionSession',
     secret: sessionSecret,
@@ -91,17 +86,21 @@ app.use(session({
         collectionName: 'sessions'
     }),
     cookie: {
-        secure: isProduction,
+        secure: isProduction, // true for HTTPS, false for HTTP
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: isProduction ? 'none' : 'lax'
+        sameSite: isProduction ? 'none' : 'lax' // 'none' for cross-site, 'lax' for same-site
     }
 }));
 
+// Set up Passport
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Load passport config
 require('./config/passport');
 
+// Set up Swagger
 const swaggerServers = [
     {
         url: 'https://book-collection-api-0vgp.onrender.com',
@@ -113,14 +112,6 @@ const swaggerServers = [
     }
 ];
 
-const currentServerExists = swaggerServers.some(server => server.url === serverBaseUrl);
-if (!currentServerExists && serverBaseUrl) {
-    swaggerServers.unshift({
-        url: serverBaseUrl,
-        description: 'Current Server'
-    });
-}
-
 const swaggerOptions = {
     definition: {
         openapi: '3.0.0',
@@ -129,42 +120,32 @@ const swaggerOptions = {
             version: '1.0.0',
             description: 'API for managing books and authors'
         },
-        servers: swaggerServers,
-        components: {
-            securitySchemes: {
-                sessionAuth: {
-                    type: 'apiKey',
-                    in: 'cookie',
-                    name: 'bookCollectionSession'
-                }
-            }
-        }
+        servers: swaggerServers
     },
     apis: ['./routes/*.js']
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-app.use('/api-docs', 
-    swaggerUi.serve,
-    swaggerUi.setup(swaggerSpec)
-);
+// ====================
+// BASIC ROUTES
+// ====================
 
 app.get('/', (req, res) => {
     res.json({
         message: 'Book Collection API',
         version: '1.0.0',
+        environment: nodeEnv,
         server: serverBaseUrl,
         endpoints: {
             books: '/api/books',
             authors: '/api/authors',
             docs: '/api-docs',
             health: '/health',
-            auth: {
-                login: '/auth/google',
-                status: '/auth/status',
-                logout: '/auth/logout'
-            }
+            auth_login: '/auth/google',
+            auth_status: '/auth/status',
+            auth_logout: '/auth/logout'
         }
     });
 });
@@ -181,6 +162,10 @@ app.get('/health', (req, res) => {
     });
 });
 
+// ====================
+// AUTH ROUTES
+// ====================
+
 app.get('/auth/status', (req, res) => {
     const isLoggedIn = req.isAuthenticated();
     
@@ -194,33 +179,33 @@ app.get('/auth/status', (req, res) => {
     });
 });
 
+// Google OAuth routes
 const hasGoogleAuth = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET;
 
 if (hasGoogleAuth) {
-    // Get callback URL based on environment
-    const getCallbackURL = () => {
-        if (isProduction) {
-            return 'https://book-collection-api-0vgp.onrender.com/auth/google/callback';
-        } else {
-            return 'http://localhost:3000/auth/google/callback';
-        }
-    };
-
+    console.log('Google OAuth is configured');
+    
+    // Google login
     app.get('/auth/google',
         passport.authenticate('google', { 
-            scope: ['email', 'profile']
+            scope: ['email', 'profile'],
+            prompt: 'select_account' // Always show account selector
         })
     );
 
+    // Google callback
     app.get('/auth/google/callback',
         passport.authenticate('google', { 
             failureRedirect: '/auth/failure'
         }),
         (req, res) => {
+            // Successful authentication
+            console.log('User authenticated:', req.user.displayName);
             res.redirect('/auth/success');
         }
     );
     
+    // Login success
     app.get('/auth/success', (req, res) => {
         if (!req.isAuthenticated()) {
             return res.redirect('/auth/failure');
@@ -230,12 +215,25 @@ if (hasGoogleAuth) {
             success: true,
             message: 'Login successful',
             user: {
+                id: req.user.id,
                 name: req.user.displayName,
                 email: req.user.email
-            }
+            },
+            session_id: req.sessionID
+        });
+    });
+    
+    // Login failure
+    app.get('/auth/failure', (req, res) => {
+        console.log('Login failed, query params:', req.query);
+        res.status(401).json({
+            error: 'Login failed',
+            details: req.query.error || 'Unknown error'
         });
     });
 } else {
+    console.log('Google OAuth is NOT configured');
+    
     app.get('/auth/google', (req, res) => {
         res.json({
             error: 'Google OAuth not configured'
@@ -243,6 +241,7 @@ if (hasGoogleAuth) {
     });
 }
 
+// Logout
 app.get('/auth/logout', (req, res) => {
     req.logout((err) => {
         if (err) {
@@ -256,11 +255,9 @@ app.get('/auth/logout', (req, res) => {
     });
 });
 
-app.get('/auth/failure', (req, res) => {
-    res.status(401).json({
-        error: 'Login failed'
-    });
-});
+// ====================
+// DATABASE CONNECTION
+// ====================
 
 const connectToDatabase = async () => {
     try {
@@ -272,11 +269,19 @@ const connectToDatabase = async () => {
     }
 };
 
+// ====================
+// API ROUTES
+// ====================
+
 const bookRoutes = require('./routes/bookRoutes');
 const authorRoutes = require('./routes/authorRoutes');
 
 app.use('/api/books', bookRoutes);
 app.use('/api/authors', authorRoutes);
+
+// ====================
+// ERROR HANDLING
+// ====================
 
 app.use((req, res) => {
     res.status(404).json({
@@ -288,9 +293,14 @@ app.use((error, req, res, next) => {
     console.error('Server error:', error);
     
     res.status(500).json({
-        error: 'Internal server error'
+        error: 'Internal server error',
+        message: isProduction ? 'Something went wrong' : error.message
     });
 });
+
+// ====================
+// START SERVER
+// ====================
 
 const startServer = async () => {
     await connectToDatabase();
