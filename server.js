@@ -20,25 +20,27 @@ const sessionSecret = process.env.SESSION_SECRET;
 const port = process.env.PORT || 3000;
 const nodeEnv = process.env.NODE_ENV || 'development';
 
-// Check if we're in production mode
+// Check if we're in production mode (Render automatically sets NODE_ENV=production)
 const isProduction = nodeEnv === 'production';
 
 // Figure out which URL to use
 let serverBaseUrl;
 
+// On Render, RENDER_EXTERNAL_URL is automatically provided
 if (process.env.RENDER_EXTERNAL_URL) {
     serverBaseUrl = process.env.RENDER_EXTERNAL_URL;
-    console.log('Running on Render, URL:', serverBaseUrl);
+    console.log('Running on Render');
+    console.log('Render URL:', serverBaseUrl);
 } else {
     serverBaseUrl = `http://localhost:${port}`;
-    console.log('Running locally, URL:', serverBaseUrl);
+    console.log('Running locally');
+    console.log('Local URL:', serverBaseUrl);
 }
 
 console.log('Starting Book Collection API');
 console.log('Environment:', nodeEnv);
-console.log('Port:', port);
-console.log('Server URL:', serverBaseUrl);
 console.log('Is production:', isProduction);
+console.log('Port:', port);
 
 // Check if we have MongoDB connection string
 if (!mongodbUri) {
@@ -46,7 +48,13 @@ if (!mongodbUri) {
     process.exit(1);
 }
 
-// Set up CORS
+// Check if we have session secret
+if (!sessionSecret) {
+    console.error('Error: SESSION_SECRET is required');
+    process.exit(1);
+}
+
+// Set up CORS - IMPORTANT for Render
 const allowedOrigins = [
     'http://localhost:3000',
     'https://localhost:3000',
@@ -54,12 +62,14 @@ const allowedOrigins = [
     serverBaseUrl
 ].filter(origin => origin);
 
-console.log('Allowed origins:', allowedOrigins);
+console.log('CORS allowed origins:', allowedOrigins);
 
 app.use(cors({
     origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
         
+        // Check if origin is allowed
         if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -68,14 +78,16 @@ app.use(cors({
         }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
 }));
 
+// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// Set up sessions
+// Set up sessions - CRITICAL FOR RENDER
 app.use(session({
     name: 'bookCollectionSession',
     secret: sessionSecret,
@@ -83,13 +95,15 @@ app.use(session({
     saveUninitialized: false,
     store: MongoStore.create({
         mongoUrl: mongodbUri,
-        collectionName: 'sessions'
+        collectionName: 'sessions',
+        ttl: 24 * 60 * 60 // 24 hours
     }),
     cookie: {
-        secure: isProduction, // true for HTTPS, false for HTTP
+        secure: isProduction, // TRUE for Render (HTTPS), FALSE for localhost
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000,
-        sameSite: isProduction ? 'none' : 'lax' // 'none' for cross-site, 'lax' for same-site
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: isProduction ? 'none' : 'lax', // 'none' for Render, 'lax' for localhost
+        domain: isProduction ? '.onrender.com' : 'localhost' // Important for cookies to work
     }
 }));
 
@@ -104,7 +118,7 @@ require('./config/passport');
 const swaggerServers = [
     {
         url: 'https://book-collection-api-0vgp.onrender.com',
-        description: 'Production Server'
+        description: 'Production Server (Render)'
     },
     {
         url: 'http://localhost:3000',
@@ -143,9 +157,7 @@ app.get('/', (req, res) => {
             authors: '/api/authors',
             docs: '/api-docs',
             health: '/health',
-            auth_login: '/auth/google',
-            auth_status: '/auth/status',
-            auth_logout: '/auth/logout'
+            auth: '/auth'
         }
     });
 });
@@ -158,7 +170,8 @@ app.get('/health', (req, res) => {
         timestamp: new Date().toISOString(),
         database: dbStatus,
         environment: nodeEnv,
-        server: serverBaseUrl
+        server: serverBaseUrl,
+        session_id: req.sessionID
     });
 });
 
@@ -166,16 +179,27 @@ app.get('/health', (req, res) => {
 // AUTH ROUTES
 // ====================
 
-app.get('/auth/status', (req, res) => {
-    const isLoggedIn = req.isAuthenticated();
-    
+app.get('/auth', (req, res) => {
     res.json({
-        authenticated: isLoggedIn,
-        user: isLoggedIn ? {
+        available_endpoints: {
+            login: '/auth/google',
+            status: '/auth/status',
+            logout: '/auth/logout'
+        },
+        session_id: req.sessionID,
+        authenticated: req.isAuthenticated() ? true : false
+    });
+});
+
+app.get('/auth/status', (req, res) => {
+    res.json({
+        authenticated: req.isAuthenticated(),
+        user: req.isAuthenticated() ? {
             id: req.user.id,
             name: req.user.displayName,
             email: req.user.email
-        } : null
+        } : null,
+        session_id: req.sessionID
     });
 });
 
@@ -183,54 +207,42 @@ app.get('/auth/status', (req, res) => {
 const hasGoogleAuth = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET;
 
 if (hasGoogleAuth) {
-    console.log('Google OAuth is configured');
+    console.log('Google OAuth is configured for', isProduction ? 'production' : 'development');
     
-    // Google login
+    // SIMPLE Google login - minimal configuration
     app.get('/auth/google',
         passport.authenticate('google', { 
-            scope: ['email', 'profile'],
-            prompt: 'select_account' // Always show account selector
+            scope: ['email', 'profile']
         })
     );
 
-    // Google callback
+    // SIMPLE Google callback
     app.get('/auth/google/callback',
         passport.authenticate('google', { 
-            failureRedirect: '/auth/failure'
+            failureRedirect: '/auth/error'
         }),
         (req, res) => {
-            // Successful authentication
-            console.log('User authenticated:', req.user.displayName);
-            res.redirect('/auth/success');
+            // Successful login - just return user info
+            res.json({
+                success: true,
+                message: 'Login successful',
+                user: {
+                    id: req.user.id,
+                    name: req.user.displayName,
+                    email: req.user.email
+                }
+            });
         }
     );
     
-    // Login success
-    app.get('/auth/success', (req, res) => {
-        if (!req.isAuthenticated()) {
-            return res.redirect('/auth/failure');
-        }
-        
-        res.json({
-            success: true,
-            message: 'Login successful',
-            user: {
-                id: req.user.id,
-                name: req.user.displayName,
-                email: req.user.email
-            },
-            session_id: req.sessionID
+    // Login error page
+    app.get('/auth/error', (req, res) => {
+        res.status(401).json({
+            error: 'Login failed',
+            message: 'Please try again'
         });
     });
     
-    // Login failure
-    app.get('/auth/failure', (req, res) => {
-        console.log('Login failed, query params:', req.query);
-        res.status(401).json({
-            error: 'Login failed',
-            details: req.query.error || 'Unknown error'
-        });
-    });
 } else {
     console.log('Google OAuth is NOT configured');
     
@@ -250,7 +262,7 @@ app.get('/auth/logout', (req, res) => {
         
         res.json({
             success: true,
-            message: 'Logged out'
+            message: 'Logged out successfully'
         });
     });
 });
@@ -283,9 +295,15 @@ app.use('/api/authors', authorRoutes);
 // ERROR HANDLING
 // ====================
 
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+    next();
+});
+
 app.use((req, res) => {
     res.status(404).json({
-        error: 'Route not found'
+        error: 'Route not found',
+        path: req.originalUrl
     });
 });
 
@@ -294,7 +312,7 @@ app.use((error, req, res, next) => {
     
     res.status(500).json({
         error: 'Internal server error',
-        message: isProduction ? 'Something went wrong' : error.message
+        message: error.message
     });
 });
 
@@ -306,11 +324,16 @@ const startServer = async () => {
     await connectToDatabase();
     
     app.listen(port, '0.0.0.0', () => {
-        console.log('Server started');
-        console.log('Local URL: http://localhost:' + port);
-        console.log('Production URL: https://book-collection-api-0vgp.onrender.com');
-        console.log('Current URL:', serverBaseUrl);
-        console.log('API docs:', serverBaseUrl + '/api-docs');
+        console.log('Server started successfully');
+        console.log('Environment:', nodeEnv);
+        console.log('Port:', port);
+        console.log('Server URL:', serverBaseUrl);
+        console.log('');
+        console.log('Test these endpoints:');
+        console.log('1. Home:', serverBaseUrl);
+        console.log('2. Health:', serverBaseUrl + '/health');
+        console.log('3. Auth status:', serverBaseUrl + '/auth/status');
+        console.log('4. Google login:', serverBaseUrl + '/auth/google');
     });
 };
 
