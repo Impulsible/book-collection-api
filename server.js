@@ -119,7 +119,166 @@ const swaggerOptions = {
             version: '1.0.0',
             description: 'API for managing books and authors'
         },
-        servers: swaggerServers
+        servers: swaggerServers,
+        components: {
+            schemas: {
+                Author: {
+                    type: 'object',
+                    properties: {
+                        _id: {
+                            type: 'string',
+                            description: 'Author ID',
+                            example: '507f1f77bcf86cd799439011'
+                        },
+                        name: {
+                            type: 'string',
+                            description: 'Author name',
+                            example: 'George R.R. Martin'
+                        },
+                        biography: {
+                            type: 'string',
+                            description: 'Author biography',
+                            example: 'Author of the epic fantasy series A Song of Ice and Fire'
+                        },
+                        birthDate: {
+                            type: 'string',
+                            format: 'date',
+                            description: 'Author birth date',
+                            example: '1948-09-20'
+                        },
+                        nationality: {
+                            type: 'string',
+                            description: 'Author nationality',
+                            example: 'American'
+                        },
+                        website: {
+                            type: 'string',
+                            description: 'Author website',
+                            example: 'https://georgerrmartin.com'
+                        },
+                        books: {
+                            type: 'array',
+                            items: {
+                                $ref: '#/components/schemas/Book'
+                            },
+                            description: 'Books by this author'
+                        },
+                        createdAt: {
+                            type: 'string',
+                            format: 'date-time',
+                            description: 'Creation timestamp'
+                        },
+                        updatedAt: {
+                            type: 'string',
+                            format: 'date-time',
+                            description: 'Last update timestamp'
+                        }
+                    }
+                },
+                Book: {
+                    type: 'object',
+                    properties: {
+                        _id: {
+                            type: 'string',
+                            description: 'Book ID',
+                            example: '507f1f77bcf86cd799439012'
+                        },
+                        title: {
+                            type: 'string',
+                            description: 'Book title',
+                            example: 'A Game of Thrones'
+                        },
+                        author: {
+                            $ref: '#/components/schemas/Author'
+                        },
+                        isbn: {
+                            type: 'string',
+                            description: 'ISBN number',
+                            example: '9780553103540'
+                        },
+                        publicationYear: {
+                            type: 'integer',
+                            description: 'Year of publication',
+                            example: 1996
+                        },
+                        genre: {
+                            type: 'string',
+                            description: 'Book genre',
+                            example: 'Fantasy'
+                        },
+                        publisher: {
+                            type: 'string',
+                            description: 'Publisher name',
+                            example: 'Bantam Books'
+                        },
+                        pageCount: {
+                            type: 'integer',
+                            description: 'Number of pages',
+                            example: 694
+                        },
+                        description: {
+                            type: 'string',
+                            description: 'Book description',
+                            example: 'The first book in the epic fantasy series A Song of Ice and Fire'
+                        },
+                        language: {
+                            type: 'string',
+                            description: 'Book language',
+                            example: 'English'
+                        },
+                        createdAt: {
+                            type: 'string',
+                            format: 'date-time',
+                            description: 'Creation timestamp'
+                        },
+                        updatedAt: {
+                            type: 'string',
+                            format: 'date-time',
+                            description: 'Last update timestamp'
+                        }
+                    }
+                },
+                Error: {
+                    type: 'object',
+                    properties: {
+                        success: {
+                            type: 'boolean',
+                            example: false
+                        },
+                        message: {
+                            type: 'string',
+                            example: 'Error message'
+                        },
+                        error: {
+                            type: 'string',
+                            example: 'Detailed error description'
+                        }
+                    }
+                }
+            },
+            securitySchemes: {
+                sessionAuth: {
+                    type: 'apiKey',
+                    in: 'cookie',
+                    name: 'bookCollectionSession',
+                    description: 'Session cookie for authenticated requests'
+                }
+            }
+        },
+        tags: [
+            {
+                name: 'Books',
+                description: 'Book management operations'
+            },
+            {
+                name: 'Authors',
+                description: 'Author management operations'
+            },
+            {
+                name: 'Authentication',
+                description: 'User authentication operations'
+            }
+        ]
     },
     apis: ['./routes/*.js']
 };
