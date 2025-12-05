@@ -7,6 +7,7 @@ const passport = require('passport');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const MongoStore = require('connect-mongo');
+const cookieParser = require('cookie-parser'); // Add this
 
 // Load environment variables
 require('dotenv').config();
@@ -69,6 +70,9 @@ app.use(cors({
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
+
+// Add cookie parser BEFORE session middleware
+app.use(cookieParser());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -156,13 +160,6 @@ const swaggerOptions = {
                             description: 'Author website',
                             example: 'https://georgerrmartin.com'
                         },
-                        books: {
-                            type: 'array',
-                            items: {
-                                $ref: '#/components/schemas/Book'
-                            },
-                            description: 'Books by this author'
-                        },
                         createdAt: {
                             type: 'string',
                             format: 'date-time',
@@ -189,7 +186,9 @@ const swaggerOptions = {
                             example: 'A Game of Thrones'
                         },
                         author: {
-                            $ref: '#/components/schemas/Author'
+                            type: 'string',
+                            description: 'Author ID',
+                            example: '507f1f77bcf86cd799439011'
                         },
                         isbn: {
                             type: 'string',
@@ -304,7 +303,9 @@ app.get('/', (req, res) => {
             auth: '/auth',
             auth_login: '/auth/google',
             auth_status: '/auth/status',
-            auth_logout: '/auth/logout'
+            auth_logout: '/auth/logout',
+            test_cookie: '/test-cookie',
+            check_cookie: '/check-cookie'
         }
     });
 });
@@ -323,6 +324,53 @@ app.get('/health', (req, res) => {
 });
 
 // ====================
+// DEBUG ROUTES
+// ====================
+
+// Test if cookies are working
+app.get('/test-cookie', (req, res) => {
+    // Set a test cookie
+    res.cookie('testCookie', 'test-value-123', {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
+        maxAge: 24 * 60 * 60 * 1000
+    });
+    
+    res.json({
+        success: true,
+        message: 'Test cookie set',
+        session_id: req.sessionID,
+        cookies_sent: req.headers.cookie || 'No cookies received',
+        session_authenticated: req.isAuthenticated()
+    });
+});
+
+app.get('/check-cookie', (req, res) => {
+    res.json({
+        success: true,
+        cookies_received: req.headers.cookie || 'No cookies',
+        test_cookie_value: req.cookies.testCookie || 'Not found',
+        session_id: req.sessionID,
+        authenticated: req.isAuthenticated(),
+        user: req.user || null
+    });
+});
+
+// Debug session route
+app.get('/auth/debug-session', (req, res) => {
+    res.json({
+        session_id: req.sessionID,
+        session_exists: !!req.session,
+        passport_user: req.user,
+        authenticated: req.isAuthenticated(),
+        cookies: req.headers.cookie || 'No cookies',
+        session_store: req.sessionStore ? 'Exists' : 'No store',
+        note: 'Check if session_id matches your login response'
+    });
+});
+
+// ====================
 // AUTH ROUTES
 // ====================
 
@@ -331,7 +379,8 @@ app.get('/auth', (req, res) => {
         available_endpoints: {
             login: '/auth/google',
             status: '/auth/status',
-            logout: '/auth/logout'
+            logout: '/auth/logout',
+            debug_session: '/auth/debug-session'
         },
         session_id: req.sessionID,
         authenticated: req.isAuthenticated() ? true : false,
@@ -367,24 +416,26 @@ if (hasGoogleAuth) {
         })
     );
 
-    // Google callback - WORKING FOR BOTH ENVIRONMENTS
+    // Google callback
     app.get('/auth/google/callback',
         (req, res, next) => {
-            console.log('Google OAuth callback received');
-            console.log('Environment:', nodeEnv);
-            console.log('Server:', serverBaseUrl);
-            console.log('Has code:', req.query.code ? 'Yes' : 'No');
-            console.log('Has error:', req.query.error || 'No');
+            console.log('Google OAuth callback - Session ID:', req.sessionID);
             next();
         },
         passport.authenticate('google', { 
             failureRedirect: '/auth/failure'
         }),
         (req, res) => {
-            console.log('Google authentication successful!');
-            console.log('User:', req.user.displayName);
+            console.log('Google authentication successful! User:', req.user.displayName);
             
-            // Send success response
+            // Set session cookie manually for debugging
+            res.cookie('debugSessionId', req.sessionID, {
+                secure: isProduction,
+                httpOnly: false, // Set to false so we can see it in browser
+                maxAge: 24 * 60 * 60 * 1000,
+                sameSite: isProduction ? 'none' : 'lax'
+            });
+            
             res.json({
                 success: true,
                 message: 'Login successful!',
@@ -394,33 +445,27 @@ if (hasGoogleAuth) {
                     email: req.user.email
                 },
                 session_id: req.sessionID,
+                debug_cookie_set: 'debugSessionId',
+                note: 'Check browser cookies for bookCollectionSession cookie',
                 server: serverBaseUrl,
                 environment: nodeEnv,
                 endpoints: {
                     status: '/auth/status',
-                    logout: '/auth/logout'
+                    logout: '/auth/logout',
+                    debug: '/auth/debug-session'
                 }
             });
         }
     );
     
-    // Login failure with helpful info
+    // Login failure
     app.get('/auth/failure', (req, res) => {
-        console.log('Login failure - Details:', req.query);
-        
-        // Determine which callback URL should be used
-        const expectedCallback = isProduction 
-            ? 'https://book-collection-api-0vgp.onrender.com/auth/google/callback'
-            : 'http://localhost:3000/auth/google/callback';
+        console.log('Login failure - Query:', req.query);
         
         res.status(401).json({
             error: 'Login failed',
             details: req.query.error_description || 'Please try again',
-            google_error: req.query.error || 'unknown',
-            environment: nodeEnv,
-            server: serverBaseUrl,
-            expected_callback_url: expectedCallback,
-            solution: 'Make sure Google Console has this callback URL: ' + expectedCallback
+            google_error: req.query.error || 'unknown'
         });
     });
     
@@ -441,6 +486,10 @@ app.get('/auth/logout', (req, res) => {
         if (err) {
             return res.status(500).json({ error: 'Logout failed' });
         }
+        
+        // Clear the session cookie
+        res.clearCookie('bookCollectionSession');
+        res.clearCookie('debugSessionId');
         
         res.json({
             success: true,
@@ -479,6 +528,7 @@ app.use('/api/authors', authorRoutes);
 
 app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+    console.log('Cookies:', req.headers.cookie || 'None');
     next();
 });
 
@@ -516,6 +566,8 @@ const startServer = async () => {
         console.log('  Health:', serverBaseUrl + '/health');
         console.log('  Auth status:', serverBaseUrl + '/auth/status');
         console.log('  Google login:', serverBaseUrl + '/auth/google');
+        console.log('  Test cookie:', serverBaseUrl + '/test-cookie');
+        console.log('  Check cookie:', serverBaseUrl + '/check-cookie');
         console.log('');
         console.log('For localhost: http://localhost:' + port);
         console.log('For Render: https://book-collection-api-0vgp.onrender.com');

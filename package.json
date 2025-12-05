@@ -13,20 +13,22 @@
     "books",
     "crud",
     "mongodb",
-    "express"
+    "express",
+    "authentication",
+    "oauth"
   ],
   "author": "Your Name",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
     "connect-mongo": "^5.1.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
     "mongoose": "^8.20.0",
     "passport": "^0.7.0",
-    "passport-google-oauth2": "^0.2.0",
     "passport-google-oauth20": "^2.0.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
