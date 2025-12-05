@@ -58,18 +58,14 @@ const allowedOrigins = [
     'https://localhost:3000',
     'https://book-collection-api-0vgp.onrender.com',
     serverBaseUrl
-].filter(origin => origin); // Remove any empty values
+].filter(origin => origin);
 
-// Log allowed origins
 console.log('Allowed origins:', allowedOrigins);
 
-// Enable CORS
 app.use(cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin
         if (!origin) return callback(null, true);
         
-        // Check if origin is allowed
         if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -81,12 +77,10 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 
-// Set up middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// Set up sessions
 app.use(session({
     name: 'bookCollectionSession',
     secret: sessionSecret,
@@ -104,12 +98,10 @@ app.use(session({
     }
 }));
 
-// Set up Passport for authentication
 app.use(passport.initialize());
 app.use(passport.session());
 require('./config/passport');
 
-// Set up Swagger documentation
 const swaggerServers = [
     {
         url: 'https://book-collection-api-0vgp.onrender.com',
@@ -121,7 +113,6 @@ const swaggerServers = [
     }
 ];
 
-// Add current server URL if not already in the list
 const currentServerExists = swaggerServers.some(server => server.url === serverBaseUrl);
 if (!currentServerExists && serverBaseUrl) {
     swaggerServers.unshift({
@@ -154,13 +145,11 @@ const swaggerOptions = {
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
-// Serve Swagger UI
 app.use('/api-docs', 
     swaggerUi.serve,
     swaggerUi.setup(swaggerSpec)
 );
 
-// Basic routes
 app.get('/', (req, res) => {
     res.json({
         message: 'Book Collection API',
@@ -192,7 +181,6 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Authentication routes
 app.get('/auth/status', (req, res) => {
     const isLoggedIn = req.isAuthenticated();
     
@@ -206,28 +194,33 @@ app.get('/auth/status', (req, res) => {
     });
 });
 
-// Check if Google auth is configured
 const hasGoogleAuth = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET;
 
 if (hasGoogleAuth) {
-    // Google login
+    // Get callback URL based on environment
+    const getCallbackURL = () => {
+        if (isProduction) {
+            return 'https://book-collection-api-0vgp.onrender.com/auth/google/callback';
+        } else {
+            return 'http://localhost:3000/auth/google/callback';
+        }
+    };
+
     app.get('/auth/google',
         passport.authenticate('google', { 
-            scope: ['email', 'profile'] 
+            scope: ['email', 'profile']
         })
     );
 
-    // Google callback
     app.get('/auth/google/callback',
         passport.authenticate('google', { 
-            failureRedirect: '/auth/failure' 
+            failureRedirect: '/auth/failure'
         }),
         (req, res) => {
             res.redirect('/auth/success');
         }
     );
     
-    // Login success
     app.get('/auth/success', (req, res) => {
         if (!req.isAuthenticated()) {
             return res.redirect('/auth/failure');
@@ -243,7 +236,6 @@ if (hasGoogleAuth) {
         });
     });
 } else {
-    // Fallback if Google auth not configured
     app.get('/auth/google', (req, res) => {
         res.json({
             error: 'Google OAuth not configured'
@@ -251,7 +243,6 @@ if (hasGoogleAuth) {
     });
 }
 
-// Logout
 app.get('/auth/logout', (req, res) => {
     req.logout((err) => {
         if (err) {
@@ -265,14 +256,12 @@ app.get('/auth/logout', (req, res) => {
     });
 });
 
-// Login failure
 app.get('/auth/failure', (req, res) => {
     res.status(401).json({
         error: 'Login failed'
     });
 });
 
-// Database connection
 const connectToDatabase = async () => {
     try {
         await mongoose.connect(mongodbUri);
@@ -283,14 +272,12 @@ const connectToDatabase = async () => {
     }
 };
 
-// Load route files
 const bookRoutes = require('./routes/bookRoutes');
 const authorRoutes = require('./routes/authorRoutes');
 
 app.use('/api/books', bookRoutes);
 app.use('/api/authors', authorRoutes);
 
-// Error handlers
 app.use((req, res) => {
     res.status(404).json({
         error: 'Route not found'
@@ -305,7 +292,6 @@ app.use((error, req, res, next) => {
     });
 });
 
-// Start server
 const startServer = async () => {
     await connectToDatabase();
     
