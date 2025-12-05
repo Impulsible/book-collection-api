@@ -103,7 +103,7 @@ require('./config/passport');
 const swaggerServers = [
     {
         url: 'https://book-collection-api-0vgp.onrender.com',
-        description: 'Production Server'
+        description: 'Production Server (Render)'
     },
     {
         url: 'http://localhost:3000',
@@ -145,7 +145,6 @@ app.get('/', (req, res) => {
             auth: '/auth',
             auth_login: '/auth/google',
             auth_status: '/auth/status',
-            auth_check: '/auth/check',
             auth_logout: '/auth/logout'
         }
     });
@@ -168,61 +167,31 @@ app.get('/health', (req, res) => {
 // AUTH ROUTES
 // ====================
 
-// Route to list all auth endpoints
 app.get('/auth', (req, res) => {
     res.json({
         available_endpoints: {
             login: '/auth/google',
             status: '/auth/status',
-            check: '/auth/check',
-            logout: '/auth/logout',
-            success: '/auth/success',
-            failure: '/auth/failure'
+            logout: '/auth/logout'
         },
-        note: 'Use /auth/status or /auth/check to check login status',
-        current_user: req.isAuthenticated() ? {
-            id: req.user.id,
-            name: req.user.displayName,
-            email: req.user.email
-        } : null
+        session_id: req.sessionID,
+        authenticated: req.isAuthenticated() ? true : false,
+        server: serverBaseUrl,
+        environment: nodeEnv
     });
 });
 
-// Auth status endpoint
 app.get('/auth/status', (req, res) => {
-    const isLoggedIn = req.isAuthenticated();
-    
     res.json({
-        authenticated: isLoggedIn,
-        user: isLoggedIn ? {
+        authenticated: req.isAuthenticated(),
+        user: req.isAuthenticated() ? {
             id: req.user.id,
             name: req.user.displayName,
             email: req.user.email
         } : null,
-        endpoint: '/auth/status',
-        timestamp: new Date().toISOString()
+        session_id: req.sessionID,
+        server: serverBaseUrl
     });
-});
-
-// Auth check endpoint (same as status, different name)
-app.get('/auth/check', (req, res) => {
-    const isLoggedIn = req.isAuthenticated();
-    
-    res.json({
-        authenticated: isLoggedIn,
-        user: isLoggedIn ? {
-            id: req.user.id,
-            name: req.user.displayName,
-            email: req.user.email
-        } : null,
-        endpoint: '/auth/check',
-        timestamp: new Date().toISOString()
-    });
-});
-
-// ADD THIS: Simple /check redirect to /auth/check
-app.get('/check', (req, res) => {
-    res.redirect('/auth/check');
 });
 
 // Google OAuth routes
@@ -239,54 +208,70 @@ if (hasGoogleAuth) {
         })
     );
 
-    // Google callback
+    // Google callback - WORKING FOR BOTH ENVIRONMENTS
     app.get('/auth/google/callback',
+        (req, res, next) => {
+            console.log('Google OAuth callback received');
+            console.log('Environment:', nodeEnv);
+            console.log('Server:', serverBaseUrl);
+            console.log('Has code:', req.query.code ? 'Yes' : 'No');
+            console.log('Has error:', req.query.error || 'No');
+            next();
+        },
         passport.authenticate('google', { 
             failureRedirect: '/auth/failure'
         }),
         (req, res) => {
-            console.log('User authenticated:', req.user.displayName);
-            res.redirect('/auth/success');
+            console.log('Google authentication successful!');
+            console.log('User:', req.user.displayName);
+            
+            // Send success response
+            res.json({
+                success: true,
+                message: 'Login successful!',
+                user: {
+                    id: req.user.id,
+                    name: req.user.displayName,
+                    email: req.user.email
+                },
+                session_id: req.sessionID,
+                server: serverBaseUrl,
+                environment: nodeEnv,
+                endpoints: {
+                    status: '/auth/status',
+                    logout: '/auth/logout'
+                }
+            });
         }
     );
     
-    // Login success
-    app.get('/auth/success', (req, res) => {
-        if (!req.isAuthenticated()) {
-            return res.redirect('/auth/failure');
-        }
+    // Login failure with helpful info
+    app.get('/auth/failure', (req, res) => {
+        console.log('Login failure - Details:', req.query);
         
-        res.json({
-            success: true,
-            message: 'Login successful',
-            user: {
-                id: req.user.id,
-                name: req.user.displayName,
-                email: req.user.email
-            },
-            session_id: req.sessionID,
-            check_status_urls: [
-                '/auth/status',
-                '/auth/check',
-                '/check'
-            ]
+        // Determine which callback URL should be used
+        const expectedCallback = isProduction 
+            ? 'https://book-collection-api-0vgp.onrender.com/auth/google/callback'
+            : 'http://localhost:3000/auth/google/callback';
+        
+        res.status(401).json({
+            error: 'Login failed',
+            details: req.query.error_description || 'Please try again',
+            google_error: req.query.error || 'unknown',
+            environment: nodeEnv,
+            server: serverBaseUrl,
+            expected_callback_url: expectedCallback,
+            solution: 'Make sure Google Console has this callback URL: ' + expectedCallback
         });
     });
     
-    // Login failure
-    app.get('/auth/failure', (req, res) => {
-        res.status(401).json({
-            error: 'Login failed',
-            details: 'Please try again',
-            try_again_url: '/auth/google'
-        });
-    });
 } else {
     console.log('Google OAuth is NOT configured');
     
     app.get('/auth/google', (req, res) => {
         res.json({
-            error: 'Google OAuth not configured'
+            error: 'Google OAuth not configured',
+            note: 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables'
         });
     });
 }
@@ -333,60 +318,24 @@ app.use('/api/authors', authorRoutes);
 // ERROR HANDLING
 // ====================
 
-// Request logging middleware
 app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
     next();
 });
 
-// 404 handler with helpful message
 app.use((req, res) => {
-    console.log(`404 - Route not found: ${req.method} ${req.originalUrl}`);
-    
-    // Check if it's a common mistake (like /check instead of /auth/check)
-    let suggestion = '';
-    if (req.originalUrl === '/check') {
-        suggestion = 'Did you mean /auth/check or /auth/status?';
-    } else if (req.originalUrl === '/status') {
-        suggestion = 'Did you mean /auth/status?';
-    }
-    
-    const availableRoutes = [
-        'GET /',
-        'GET /health',
-        'GET /api-docs',
-        'GET /auth',
-        'GET /auth/google',
-        'GET /auth/status',
-        'GET /auth/check',
-        'GET /check (redirects to /auth/check)',
-        'GET /auth/logout',
-        'GET /api/books',
-        'GET /api/authors'
-    ];
-    
     res.status(404).json({
         error: 'Route not found',
-        requested: `${req.method} ${req.originalUrl}`,
-        suggestion: suggestion,
-        available_routes: availableRoutes,
-        quick_links: {
-            home: '/',
-            health_check: '/health',
-            auth_status: '/auth/status',
-            auth_check: '/auth/check',
-            google_login: '/auth/google'
-        }
+        path: req.originalUrl
     });
 });
 
-// Error handler
 app.use((error, req, res, next) => {
     console.error('Server error:', error);
     
     res.status(500).json({
         error: 'Internal server error',
-        message: isProduction ? 'Something went wrong' : error.message
+        message: error.message
     });
 });
 
@@ -398,19 +347,19 @@ const startServer = async () => {
     await connectToDatabase();
     
     app.listen(port, '0.0.0.0', () => {
-        console.log('✅ Server started successfully');
-        console.log('📍 Local URL: http://localhost:' + port);
-        console.log('🌐 Production URL: https://book-collection-api-0vgp.onrender.com');
-        console.log('🖥️  Current URL:', serverBaseUrl);
+        console.log('Server started successfully!');
+        console.log('Environment:', nodeEnv);
+        console.log('Port:', port);
+        console.log('Server URL:', serverBaseUrl);
         console.log('');
-        console.log('📋 Available endpoints:');
-        console.log('   Home:', serverBaseUrl);
-        console.log('   Health:', serverBaseUrl + '/health');
-        console.log('   Auth status:', serverBaseUrl + '/auth/status');
-        console.log('   Auth check:', serverBaseUrl + '/auth/check');
-        console.log('   Simple check (redirect):', serverBaseUrl + '/check');
-        console.log('   Google login:', serverBaseUrl + '/auth/google');
-        console.log('   API docs:', serverBaseUrl + '/api-docs');
+        console.log('Test endpoints:');
+        console.log('  Home:', serverBaseUrl);
+        console.log('  Health:', serverBaseUrl + '/health');
+        console.log('  Auth status:', serverBaseUrl + '/auth/status');
+        console.log('  Google login:', serverBaseUrl + '/auth/google');
+        console.log('');
+        console.log('For localhost: http://localhost:' + port);
+        console.log('For Render: https://book-collection-api-0vgp.onrender.com');
     });
 };
 
