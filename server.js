@@ -7,7 +7,7 @@ const passport = require('passport');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const MongoStore = require('connect-mongo');
-const cookieParser = require('cookie-parser'); // Add this
+const cookieParser = require('cookie-parser');
 
 // Load environment variables
 require('dotenv').config();
@@ -46,20 +46,32 @@ if (!mongodbUri) {
     process.exit(1);
 }
 
-// Set up CORS
+// ====================
+// CORS CONFIGURATION
+// ====================
+
 const allowedOrigins = [
     'http://localhost:3000',
     'https://localhost:3000',
+    'http://localhost:5173', // Vite dev server
     'https://book-collection-api-0vgp.onrender.com',
     serverBaseUrl
 ].filter(origin => origin);
 
 console.log('Allowed origins:', allowedOrigins);
 
+// Smart CORS configuration that works for both environments
 app.use(cors({
     origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps, curl, postman)
         if (!origin) return callback(null, true);
         
+        // Allow all localhost origins in development
+        if (!isProduction && origin.includes('localhost')) {
+            return callback(null, true);
+        }
+        
+        // Check if origin is in allowed list
         if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -67,43 +79,68 @@ app.use(cors({
             callback(new Error('Not allowed by CORS'));
         }
     },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+    credentials: true, // REQUIRED for cookies
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'Set-Cookie', 'X-Requested-With'],
+    exposedHeaders: ['Set-Cookie']
 }));
 
-// Add cookie parser BEFORE session middleware
+// ====================
+// MIDDLEWARE SETUP
+// ====================
+
+// Cookie parser must come before session
 app.use(cookieParser());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// Set up sessions
-app.use(session({
+// ====================
+// SESSION CONFIGURATION
+// ====================
+
+// Dynamic session config for both environments
+const sessionConfig = {
     name: 'bookCollectionSession',
     secret: sessionSecret,
-    resave: false,
-    saveUninitialized: false,
+    resave: true,
+    saveUninitialized: true,
     store: MongoStore.create({
         mongoUrl: mongodbUri,
-        collectionName: 'sessions'
+        collectionName: 'sessions',
+        ttl: 24 * 60 * 60 // 24 hours
     }),
     cookie: {
-        secure: isProduction,
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000,
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        // Dynamic settings based on environment
+        secure: isProduction,
         sameSite: isProduction ? 'none' : 'lax'
     }
-}));
+};
 
-// Set up Passport
+// Add domain only in production (Render)
+if (isProduction) {
+    sessionConfig.cookie.domain = '.onrender.com';
+}
+
+app.use(session(sessionConfig));
+
+// ====================
+// PASSPORT SETUP
+// ====================
+
 app.use(passport.initialize());
 app.use(passport.session());
 
 // Load passport config
 require('./config/passport');
 
-// Set up Swagger
+// ====================
+// SWAGGER CONFIGURATION
+// ====================
+
 const swaggerServers = [
     {
         url: 'https://book-collection-api-0vgp.onrender.com',
@@ -129,129 +166,31 @@ const swaggerOptions = {
                 Author: {
                     type: 'object',
                     properties: {
-                        _id: {
-                            type: 'string',
-                            description: 'Author ID',
-                            example: '507f1f77bcf86cd799439011'
-                        },
-                        name: {
-                            type: 'string',
-                            description: 'Author name',
-                            example: 'George R.R. Martin'
-                        },
-                        biography: {
-                            type: 'string',
-                            description: 'Author biography',
-                            example: 'Author of the epic fantasy series A Song of Ice and Fire'
-                        },
-                        birthDate: {
-                            type: 'string',
-                            format: 'date',
-                            description: 'Author birth date',
-                            example: '1948-09-20'
-                        },
-                        nationality: {
-                            type: 'string',
-                            description: 'Author nationality',
-                            example: 'American'
-                        },
-                        website: {
-                            type: 'string',
-                            description: 'Author website',
-                            example: 'https://georgerrmartin.com'
-                        },
-                        createdAt: {
-                            type: 'string',
-                            format: 'date-time',
-                            description: 'Creation timestamp'
-                        },
-                        updatedAt: {
-                            type: 'string',
-                            format: 'date-time',
-                            description: 'Last update timestamp'
-                        }
+                        _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
+                        name: { type: 'string', example: 'George R.R. Martin' },
+                        biography: { type: 'string', example: 'Author of A Song of Ice and Fire' },
+                        birthDate: { type: 'string', format: 'date', example: '1948-09-20' },
+                        nationality: { type: 'string', example: 'American' },
+                        website: { type: 'string', example: 'https://georgerrmartin.com' },
+                        createdAt: { type: 'string', format: 'date-time' },
+                        updatedAt: { type: 'string', format: 'date-time' }
                     }
                 },
                 Book: {
                     type: 'object',
                     properties: {
-                        _id: {
-                            type: 'string',
-                            description: 'Book ID',
-                            example: '507f1f77bcf86cd799439012'
-                        },
-                        title: {
-                            type: 'string',
-                            description: 'Book title',
-                            example: 'A Game of Thrones'
-                        },
-                        author: {
-                            type: 'string',
-                            description: 'Author ID',
-                            example: '507f1f77bcf86cd799439011'
-                        },
-                        isbn: {
-                            type: 'string',
-                            description: 'ISBN number',
-                            example: '9780553103540'
-                        },
-                        publicationYear: {
-                            type: 'integer',
-                            description: 'Year of publication',
-                            example: 1996
-                        },
-                        genre: {
-                            type: 'string',
-                            description: 'Book genre',
-                            example: 'Fantasy'
-                        },
-                        publisher: {
-                            type: 'string',
-                            description: 'Publisher name',
-                            example: 'Bantam Books'
-                        },
-                        pageCount: {
-                            type: 'integer',
-                            description: 'Number of pages',
-                            example: 694
-                        },
-                        description: {
-                            type: 'string',
-                            description: 'Book description',
-                            example: 'The first book in the epic fantasy series A Song of Ice and Fire'
-                        },
-                        language: {
-                            type: 'string',
-                            description: 'Book language',
-                            example: 'English'
-                        },
-                        createdAt: {
-                            type: 'string',
-                            format: 'date-time',
-                            description: 'Creation timestamp'
-                        },
-                        updatedAt: {
-                            type: 'string',
-                            format: 'date-time',
-                            description: 'Last update timestamp'
-                        }
-                    }
-                },
-                Error: {
-                    type: 'object',
-                    properties: {
-                        success: {
-                            type: 'boolean',
-                            example: false
-                        },
-                        message: {
-                            type: 'string',
-                            example: 'Error message'
-                        },
-                        error: {
-                            type: 'string',
-                            example: 'Detailed error description'
-                        }
+                        _id: { type: 'string', example: '507f1f77bcf86cd799439012' },
+                        title: { type: 'string', example: 'A Game of Thrones' },
+                        author: { type: 'string', example: '507f1f77bcf86cd799439011' },
+                        isbn: { type: 'string', example: '9780553103540' },
+                        publicationYear: { type: 'integer', example: 1996 },
+                        genre: { type: 'string', example: 'Fantasy' },
+                        publisher: { type: 'string', example: 'Bantam Books' },
+                        pageCount: { type: 'integer', example: 694 },
+                        description: { type: 'string' },
+                        language: { type: 'string', example: 'English' },
+                        createdAt: { type: 'string', format: 'date-time' },
+                        updatedAt: { type: 'string', format: 'date-time' }
                     }
                 }
             },
@@ -265,18 +204,9 @@ const swaggerOptions = {
             }
         },
         tags: [
-            {
-                name: 'Books',
-                description: 'Book management operations'
-            },
-            {
-                name: 'Authors',
-                description: 'Author management operations'
-            },
-            {
-                name: 'Authentication',
-                description: 'User authentication operations'
-            }
+            { name: 'Books', description: 'Book management operations' },
+            { name: 'Authors', description: 'Author management operations' },
+            { name: 'Authentication', description: 'User authentication operations' }
         ]
     },
     apis: ['./routes/*.js']
@@ -286,30 +216,30 @@ const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // ====================
-// BASIC ROUTES
+// TEST & DEBUG ROUTES
 // ====================
 
+// Test if basic API is working
 app.get('/', (req, res) => {
     res.json({
         message: 'Book Collection API',
         version: '1.0.0',
         environment: nodeEnv,
         server: serverBaseUrl,
+        authenticated: req.isAuthenticated(),
         endpoints: {
             books: '/api/books',
             authors: '/api/authors',
             docs: '/api-docs',
             health: '/health',
             auth: '/auth',
-            auth_login: '/auth/google',
-            auth_status: '/auth/status',
-            auth_logout: '/auth/logout',
-            test_cookie: '/test-cookie',
-            check_cookie: '/check-cookie'
+            test: '/test',
+            cookie_test: '/cookie-test'
         }
     });
 });
 
+// Health check
 app.get('/health', (req, res) => {
     const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
     
@@ -319,54 +249,47 @@ app.get('/health', (req, res) => {
         database: dbStatus,
         environment: nodeEnv,
         server: serverBaseUrl,
+        session_id: req.sessionID,
+        authenticated: req.isAuthenticated()
+    });
+});
+
+// Simple test route
+app.get('/test', (req, res) => {
+    res.json({
+        success: true,
+        message: 'API is working',
+        environment: nodeEnv,
+        cookies_received: req.headers.cookie || 'No cookies',
         session_id: req.sessionID
     });
 });
 
-// ====================
-// DEBUG ROUTES
-// ====================
-
-// Test if cookies are working
-app.get('/test-cookie', (req, res) => {
+// Cookie test route for both environments
+app.get('/cookie-test', (req, res) => {
     // Set a test cookie
-    res.cookie('testCookie', 'test-value-123', {
-        httpOnly: true,
+    const cookieOptions = {
+        httpOnly: false, // Allow JS access for testing
         secure: isProduction,
         sameSite: isProduction ? 'none' : 'lax',
         maxAge: 24 * 60 * 60 * 1000
-    });
+    };
+    
+    if (isProduction) {
+        cookieOptions.domain = '.onrender.com';
+    }
+    
+    res.cookie('testCookie', `test-value-${Date.now()}`, cookieOptions);
     
     res.json({
         success: true,
         message: 'Test cookie set',
+        environment: nodeEnv,
+        is_production: isProduction,
+        cookie_options: cookieOptions,
+        cookies_received: req.headers.cookie || 'No cookies received',
         session_id: req.sessionID,
-        cookies_sent: req.headers.cookie || 'No cookies received',
-        session_authenticated: req.isAuthenticated()
-    });
-});
-
-app.get('/check-cookie', (req, res) => {
-    res.json({
-        success: true,
-        cookies_received: req.headers.cookie || 'No cookies',
-        test_cookie_value: req.cookies.testCookie || 'Not found',
-        session_id: req.sessionID,
-        authenticated: req.isAuthenticated(),
-        user: req.user || null
-    });
-});
-
-// Debug session route
-app.get('/auth/debug-session', (req, res) => {
-    res.json({
-        session_id: req.sessionID,
-        session_exists: !!req.session,
-        passport_user: req.user,
-        authenticated: req.isAuthenticated(),
-        cookies: req.headers.cookie || 'No cookies',
-        session_store: req.sessionStore ? 'Exists' : 'No store',
-        note: 'Check if session_id matches your login response'
+        authenticated: req.isAuthenticated()
     });
 });
 
@@ -374,21 +297,23 @@ app.get('/auth/debug-session', (req, res) => {
 // AUTH ROUTES
 // ====================
 
+// List all auth endpoints
 app.get('/auth', (req, res) => {
     res.json({
-        available_endpoints: {
+        endpoints: {
             login: '/auth/google',
             status: '/auth/status',
             logout: '/auth/logout',
-            debug_session: '/auth/debug-session'
+            debug: '/auth/debug'
         },
+        authenticated: req.isAuthenticated(),
+        user: req.user || null,
         session_id: req.sessionID,
-        authenticated: req.isAuthenticated() ? true : false,
-        server: serverBaseUrl,
         environment: nodeEnv
     });
 });
 
+// Auth status
 app.get('/auth/status', (req, res) => {
     res.json({
         authenticated: req.isAuthenticated(),
@@ -398,7 +323,25 @@ app.get('/auth/status', (req, res) => {
             email: req.user.email
         } : null,
         session_id: req.sessionID,
-        server: serverBaseUrl
+        environment: nodeEnv
+    });
+});
+
+// Auth debug
+app.get('/auth/debug', (req, res) => {
+    res.json({
+        session_id: req.sessionID,
+        session_exists: !!req.session,
+        authenticated: req.isAuthenticated(),
+        user: req.user,
+        cookies: req.headers.cookie || 'No cookies',
+        headers: {
+            origin: req.headers.origin,
+            referer: req.headers.referer,
+            'user-agent': req.headers['user-agent']
+        },
+        environment: nodeEnv,
+        is_production: isProduction
     });
 });
 
@@ -416,25 +359,33 @@ if (hasGoogleAuth) {
         })
     );
 
-    // Google callback
+    // Google callback - SIMPLE AND RELIABLE
     app.get('/auth/google/callback',
         (req, res, next) => {
-            console.log('Google OAuth callback - Session ID:', req.sessionID);
+            console.log('Google callback - Environment:', nodeEnv);
             next();
         },
         passport.authenticate('google', { 
-            failureRedirect: '/auth/failure'
+            failureRedirect: '/auth/failure',
+            failureMessage: true
         }),
         (req, res) => {
-            console.log('Google authentication successful! User:', req.user.displayName);
+            console.log('Login successful for:', req.user.displayName);
             
-            // Set session cookie manually for debugging
-            res.cookie('debugSessionId', req.sessionID, {
+            // Manually set session cookie to ensure it's set
+            const cookieOptions = {
                 secure: isProduction,
-                httpOnly: false, // Set to false so we can see it in browser
+                httpOnly: true,
                 maxAge: 24 * 60 * 60 * 1000,
                 sameSite: isProduction ? 'none' : 'lax'
-            });
+            };
+            
+            if (isProduction) {
+                cookieOptions.domain = '.onrender.com';
+            }
+            
+            // Set the session cookie
+            res.cookie('bookCollectionSession', req.sessionID, cookieOptions);
             
             res.json({
                 success: true,
@@ -445,27 +396,22 @@ if (hasGoogleAuth) {
                     email: req.user.email
                 },
                 session_id: req.sessionID,
-                debug_cookie_set: 'debugSessionId',
-                note: 'Check browser cookies for bookCollectionSession cookie',
-                server: serverBaseUrl,
+                cookie_set: true,
                 environment: nodeEnv,
-                endpoints: {
-                    status: '/auth/status',
-                    logout: '/auth/logout',
-                    debug: '/auth/debug-session'
-                }
+                next_steps: [
+                    'Visit /auth/status to verify login',
+                    'Use the session_id for API requests'
+                ]
             });
         }
     );
     
     // Login failure
     app.get('/auth/failure', (req, res) => {
-        console.log('Login failure - Query:', req.query);
-        
         res.status(401).json({
             error: 'Login failed',
-            details: req.query.error_description || 'Please try again',
-            google_error: req.query.error || 'unknown'
+            details: req.query.error_description || 'Unknown error',
+            environment: nodeEnv
         });
     });
     
@@ -475,7 +421,7 @@ if (hasGoogleAuth) {
     app.get('/auth/google', (req, res) => {
         res.json({
             error: 'Google OAuth not configured',
-            note: 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables'
+            environment: nodeEnv
         });
     });
 }
@@ -487,13 +433,23 @@ app.get('/auth/logout', (req, res) => {
             return res.status(500).json({ error: 'Logout failed' });
         }
         
-        // Clear the session cookie
-        res.clearCookie('bookCollectionSession');
-        res.clearCookie('debugSessionId');
+        // Clear cookies
+        const clearOptions = {
+            secure: isProduction,
+            sameSite: isProduction ? 'none' : 'lax'
+        };
+        
+        if (isProduction) {
+            clearOptions.domain = '.onrender.com';
+        }
+        
+        res.clearCookie('bookCollectionSession', clearOptions);
+        res.clearCookie('testCookie', clearOptions);
         
         res.json({
             success: true,
-            message: 'Logged out successfully'
+            message: 'Logged out successfully',
+            environment: nodeEnv
         });
     });
 });
@@ -526,25 +482,44 @@ app.use('/api/authors', authorRoutes);
 // ERROR HANDLING
 // ====================
 
+// Request logging
 app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
-    console.log('Cookies:', req.headers.cookie || 'None');
+    console.log('  Cookies:', req.headers.cookie || 'None');
+    console.log('  Origin:', req.headers.origin || 'None');
     next();
 });
 
+// 404 handler
 app.use((req, res) => {
     res.status(404).json({
         error: 'Route not found',
-        path: req.originalUrl
+        path: req.originalUrl,
+        environment: nodeEnv,
+        available_routes: [
+            'GET /',
+            'GET /health',
+            'GET /test',
+            'GET /cookie-test',
+            'GET /api-docs',
+            'GET /auth',
+            'GET /auth/status',
+            'GET /auth/google',
+            'GET /auth/logout',
+            'GET /api/books',
+            'GET /api/authors'
+        ]
     });
 });
 
+// Error handler
 app.use((error, req, res, next) => {
     console.error('Server error:', error);
     
     res.status(500).json({
         error: 'Internal server error',
-        message: error.message
+        message: error.message,
+        environment: nodeEnv
     });
 });
 
@@ -556,21 +531,28 @@ const startServer = async () => {
     await connectToDatabase();
     
     app.listen(port, '0.0.0.0', () => {
-        console.log('Server started successfully!');
-        console.log('Environment:', nodeEnv);
-        console.log('Port:', port);
-        console.log('Server URL:', serverBaseUrl);
-        console.log('');
-        console.log('Test endpoints:');
-        console.log('  Home:', serverBaseUrl);
-        console.log('  Health:', serverBaseUrl + '/health');
-        console.log('  Auth status:', serverBaseUrl + '/auth/status');
-        console.log('  Google login:', serverBaseUrl + '/auth/google');
-        console.log('  Test cookie:', serverBaseUrl + '/test-cookie');
-        console.log('  Check cookie:', serverBaseUrl + '/check-cookie');
-        console.log('');
-        console.log('For localhost: http://localhost:' + port);
-        console.log('For Render: https://book-collection-api-0vgp.onrender.com');
+        console.log('\n✅ Server started successfully!');
+        console.log(`📍 Environment: ${nodeEnv}`);
+        console.log(`📍 Port: ${port}`);
+        console.log(`📍 Server URL: ${serverBaseUrl}`);
+        console.log('\n📋 Test endpoints:');
+        console.log(`  Home: ${serverBaseUrl}`);
+        console.log(`  Health: ${serverBaseUrl}/health`);
+        console.log(`  Test: ${serverBaseUrl}/test`);
+        console.log(`  Cookie test: ${serverBaseUrl}/cookie-test`);
+        console.log(`  Auth status: ${serverBaseUrl}/auth/status`);
+        console.log(`  Google login: ${serverBaseUrl}/auth/google`);
+        console.log(`  API docs: ${serverBaseUrl}/api-docs`);
+        
+        if (isProduction) {
+            console.log('\n🌐 Production (Render) mode enabled');
+            console.log('   - Cookies: secure=true, sameSite=none');
+            console.log('   - Domain: .onrender.com');
+        } else {
+            console.log('\n💻 Development (localhost) mode');
+            console.log('   - Cookies: secure=false, sameSite=lax');
+            console.log('   - Domain: localhost');
+        }
     });
 };
 
